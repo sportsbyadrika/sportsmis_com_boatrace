@@ -77,7 +77,7 @@ $available = array_values(array_filter($pool, fn($p) => !in_array((int)$p['regis
         <?= statusBadge($round['status']) ?>
         <div class="small text-muted mt-1">
           <?= $laneCount ?> lanes &middot; <?= count($heats) ?> heat<?= count($heats) === 1 ? '' : 's' ?>
-          &middot; <?= e(formatDateTime($round['race_date'], $round['race_time'])) ?>
+          &middot; <?= e(scheduleLabel(roundSchedule($round))) ?>
         </div>
       </div>
       <?php if (!$frozen): ?>
@@ -122,7 +122,7 @@ $available = array_values(array_filter($pool, fn($p) => !in_array((int)$p['regis
         <div class="sms-card heat-panel <?= $i === 0 ? '' : 'd-none' ?>" data-heat="<?= e($hh) ?>">
           <div class="sms-card-header">
             <strong><i class="bi bi-grid-3x3 me-2"></i><?= e(\Models\Heat::label($h)) ?></strong>
-            <span class="small text-muted"><?= e(formatDateTime($h['scheduled_date'], $h['scheduled_time'])) ?></span>
+            <span class="small text-muted"><?= e(scheduleLabel(heatSchedule($h, $round))) ?></span>
           </div>
           <div class="table-responsive">
             <table class="table align-middle mb-0">

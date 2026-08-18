@@ -66,6 +66,9 @@ $first   = true;
               <?php if (!empty($r['code'])): ?>
                 <div class="small text-muted">Code <?= e($r['code']) ?></div>
               <?php endif; ?>
+              <?php if (!empty($r['round_schedule'])): ?>
+                <div class="small"><strong>Rounds:</strong> <?= e($r['round_schedule']) ?></div>
+              <?php endif; ?>
             </td>
             <td class="small"><?= e($r['boat_class'] ?: '—') ?></td>
             <td class="small text-center"><?= e($genders[$r['gender']] ?? $r['gender']) ?></td>

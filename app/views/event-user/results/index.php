@@ -59,6 +59,7 @@ $frozen   = $round ? ($round['status'] === 'published') : false;
         <?= statusBadge($round['status']) ?>
         <div class="small text-muted mt-1">
           <?= (int)$round['lane_count'] ?> lanes &middot; <?= count($heats) ?> heat<?= count($heats) === 1 ? '' : 's' ?>
+          &middot; <?= e(scheduleLabel(roundSchedule($round))) ?>
           &middot; <?= (int)$round['qualify_per_heat'] ?> qualif<?= (int)$round['qualify_per_heat'] === 1 ? 'ier' : 'iers' ?> per heat
           <?php if ($nextRound): ?>
             &middot; advances to <strong><?= e($nextRound['name']) ?></strong>

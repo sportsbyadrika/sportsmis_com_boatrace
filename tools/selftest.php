@@ -358,6 +358,63 @@ if (extension_loaded('pdo_sqlite')) {
     $prop->setValue(null, null);
 }
 
+// ── Schedule cascade: race → round → heat ───────────────────────────────────
+// Each level may override the one above it, and date and time inherit
+// independently, so "semis at 14:00 on the same day" needs only a time.
+$RACE  = ['race_date' => '2026-08-08', 'race_time' => '09:30:00'];
+$plain = ['scheduled_date' => null, 'scheduled_time' => null];
+
+$s0 = roundSchedule($plain, $RACE);
+check('a round with no slot takes the race date', $s0['date'], '2026-08-08');
+check('a round with no slot takes the race time', $s0['time'], '09:30:00');
+check('and is marked inherited', $s0['inherited'], true);
+check('and owns neither field', [$s0['own_date'], $s0['own_time']], [false, false]);
+
+// Time only — the classic "semis later the same day".
+$timeOnly = ['scheduled_date' => null, 'scheduled_time' => '14:00:00'];
+$s1 = roundSchedule($timeOnly, $RACE);
+check('a time-only round keeps the race date', $s1['date'], '2026-08-08');
+check('a time-only round uses its own time',   $s1['time'], '14:00:00');
+check('a time-only round owns just the time',  [$s1['own_date'], $s1['own_time']], [false, true]);
+check('a partly-set round still reads as inherited', $s1['inherited'], true);
+
+// Both — the final on the following morning.
+$both = ['scheduled_date' => '2026-08-09', 'scheduled_time' => '10:15:00'];
+$s2 = roundSchedule($both, $RACE);
+check('a fully-set round uses its own date', $s2['date'], '2026-08-09');
+check('a fully-set round uses its own time', $s2['time'], '10:15:00');
+check('a fully-set round is not inherited',  $s2['inherited'], false);
+
+// A heat resolves through its round, not straight to the race.
+$heatPlain = ['scheduled_date' => null, 'scheduled_time' => null];
+$h1 = heatSchedule($heatPlain, $timeOnly, $RACE);
+check('a heat inherits its round rather than the race', $h1['time'], '14:00:00');
+check('and still picks up the race date through it',    $h1['date'], '2026-08-08');
+
+$heatOwn = ['scheduled_date' => null, 'scheduled_time' => '14:45:00'];
+$h2 = heatSchedule($heatOwn, $timeOnly, $RACE);
+check('a heat may override its round', $h2['time'], '14:45:00');
+check('while still inheriting the date', $h2['date'], '2026-08-08');
+
+$h3 = heatSchedule($heatPlain, $both, $RACE);
+check('a heat follows a round moved to another day', $h3['date'], '2026-08-09');
+check('and that round\'s time', $h3['time'], '10:15:00');
+
+// Placeholder values must count as "not set", or a zero date would win over
+// a real one from the level above.
+$zero = ['scheduled_date' => '0000-00-00', 'scheduled_time' => '00:00:00'];
+$s3 = roundSchedule($zero, $RACE);
+check('a zero date does not override', $s3['date'], '2026-08-08');
+check('a zero time does not override', $s3['time'], '09:30:00');
+
+// Nothing anywhere stays genuinely empty rather than inventing a date.
+$s4 = roundSchedule($plain, ['race_date' => null, 'race_time' => null]);
+check('an unscheduled race leaves the round unscheduled', [$s4['date'], $s4['time']], ['', '']);
+check('and its label says so', scheduleLabel($s4), '—');
+
+check('a resolved slot formats as date and time',
+    scheduleLabel($s2), '09 Aug 2026 · 10:15 AM');
+
 // ── Race entries: saving the list must not destroy boat photos ──────────────
 // Each entry carries the boat's photo for that race. setEntries() used to
 // delete every row and re-insert, which would have thrown those photos away

@@ -112,6 +112,8 @@ class EventUserRoundController extends EventUserBase
             'sort_order'       => Round::nextSortOrder((int)$race['id']),
             'lane_count'       => $this->lanes((int)($_POST['lane_count'] ?? $race['lane_count'])),
             'qualify_per_heat' => max(0, min(20, (int)($_POST['qualify_per_heat'] ?? 2))),
+            'scheduled_date'   => trim((string)($_POST['scheduled_date'] ?? '')) ?: null,
+            'scheduled_time'   => trim((string)($_POST['scheduled_time'] ?? '')) ?: null,
             'status'           => 'draft',
         ]);
 
@@ -148,6 +150,9 @@ class EventUserRoundController extends EventUserBase
             'lane_count'       => $newLanes,
             'qualify_per_heat' => max(0, min(20, (int)($_POST['qualify_per_heat'] ?? $round['qualify_per_heat']))),
             'sort_order'       => max(1, min(50, (int)($_POST['sort_order'] ?? $round['sort_order']))),
+            // Blank clears the override, so the round inherits its race again.
+            'scheduled_date'   => trim((string)($_POST['scheduled_date'] ?? '')) ?: null,
+            'scheduled_time'   => trim((string)($_POST['scheduled_time'] ?? '')) ?: null,
         ]);
         $this->redirect($back, 'Round updated.');
     }

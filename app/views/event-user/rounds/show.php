@@ -77,6 +77,18 @@ $types = \Models\Round::TYPES;
           </div>
 
           <div class="px-3 pt-3">
+            <?php $roSlot = roundSchedule($ro, $race); ?>
+            <div class="small text-muted mb-2">
+              <i class="bi bi-clock me-1"></i>
+              <?php if ($roSlot['date'] === '' && $roSlot['time'] === ''): ?>
+                <span class="fst-italic">Unscheduled</span>
+              <?php else: ?>
+                <?= e(scheduleLabel($roSlot)) ?>
+                <?php if ($roSlot['inherited']): ?>
+                  <span class="text-muted">(<?= $roSlot['own_date'] || $roSlot['own_time'] ? 'partly ' : '' ?>from the race)</span>
+                <?php endif; ?>
+              <?php endif; ?>
+            </div>
             <div class="row text-center g-2 small mb-3">
               <div class="col-4"><div class="fw-bold fs-5"><?= (int)$ro['lane_count'] ?></div><div class="text-muted">Lanes</div></div>
               <div class="col-4"><div class="fw-bold fs-5"><?= (int)$ro['heat_count'] ?></div><div class="text-muted">Heats</div></div>
@@ -111,7 +123,7 @@ $types = \Models\Round::TYPES;
                     <tr>
                       <td class="fw-bold"><?= (int)$ht['heat_no'] ?></td>
                       <td><?= e(\Models\Heat::label($ht)) ?></td>
-                      <td class="small text-muted"><?= e(formatDateTime($ht['scheduled_date'], $ht['scheduled_time'])) ?></td>
+                      <td class="small text-muted"><?= e(scheduleLabel(heatSchedule($ht, $ro, $race))) ?></td>
                       <td class="text-center">
                         <span class="badge <?= (int)$ht['allocated_count'] >= (int)$ro['lane_count'] ? 'bg-success' : 'bg-secondary' ?>">
                           <?= (int)$ht['allocated_count'] ?>/<?= (int)$ro['lane_count'] ?>
@@ -174,6 +186,22 @@ $types = \Models\Round::TYPES;
             <input type="number" name="sort_order" class="form-control" min="1" max="50"
                    value="<?= (int)$v('sort_order', 1) ?>">
           <?php endif; ?>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Date</label>
+          <input type="date" name="scheduled_date" class="form-control" value="<?= e($v('scheduled_date')) ?>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Time</label>
+          <input type="time" name="scheduled_time" class="form-control"
+                 value="<?= e(substr((string)$v('scheduled_time'), 0, 5)) ?>">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <div class="form-text mb-2">
+            Blank inherits the race&rsquo;s slot
+            (<?= e(formatDateTime($race['race_date'], $race['race_time'])) ?>).
+          </div>
         </div>
       </div>
       <?php return (string)ob_get_clean();
@@ -247,7 +275,10 @@ $types = \Models\Round::TYPES;
                          value="<?= e(substr((string)$ht['scheduled_time'], 0, 5)) ?>">
                 </div>
               </div>
-              <div class="form-text mt-2">Leave blank to inherit the race&rsquo;s own date and time.</div>
+              <div class="form-text mt-2">
+                Leave blank to inherit <strong><?= e($ro['name']) ?></strong>&rsquo;s slot
+                (<?= e(scheduleLabel(roundSchedule($ro, $race))) ?>).
+              </div>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>

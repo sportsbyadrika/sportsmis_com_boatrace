@@ -39,14 +39,18 @@ cannot be reached by URL either.
 ```
 Order of Events   →   Rounds        →   Heats        →   Lane draw   →   Results
 (programme item)      (Prelim /         (n per round,     (drag boats     (times, positions,
-                       Semi / Final)     lane count        onto lanes)     qualifiers)
-                                         per round)
+ date + time)          Semi / Final,     lane count        onto lanes)     qualifiers)
+                       own date+time)    own date+time)
                                                                               │
                         ┌─────────────────────────────────────────────────────┘
                         ▼
                    Publish round  →  Reports (rank list 1st–4th, heat sheets)
                                   →  Display screens (LED wall, stream overlay)
 ```
+
+Scheduling cascades: a round with no slot of its own runs at its race's, and a
+heat with none runs at its round's — so prelims, semis and the final can each
+take their own time without touching every heat.
 
 Nothing provisional escapes: reports and both display screens read
 **published rounds only**, and only an **approved** team registration can be

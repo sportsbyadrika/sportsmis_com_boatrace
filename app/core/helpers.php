@@ -169,6 +169,68 @@ function raceTimeToCentis(?string $t): int
     return ((int)$mm * 60 + (int)$ss) * 100 + (int)round(((int)$ms) / 10);
 }
 
+/**
+ * Resolve a scheduled slot against the level above it.
+ *
+ * A regatta is scheduled at three levels and each one is optional:
+ *
+ *     race  ──▶  round  ──▶  heat
+ *
+ * A race always carries a date and time. A round may override either — semis
+ * at 14:00 on the same day, or the final on the following morning — and an
+ * individual heat may override again. Anything left blank inherits, so an
+ * event that runs a race straight through needs no extra data entry at all.
+ *
+ * Date and time inherit independently: a round on the same day at a different
+ * time only has to set the time.
+ *
+ * Returns ['date','time','own_date','own_time','inherited'].
+ */
+function effectiveSchedule(?string $date, ?string $time, ?string $fallbackDate = null, ?string $fallbackTime = null): array
+{
+    $date = trim((string)$date);
+    $time = trim((string)$time);
+    $ownDate = $date !== '' && $date !== '0000-00-00';
+    $ownTime = $time !== '' && $time !== '00:00:00';
+
+    return [
+        'date'      => $ownDate ? $date : (string)$fallbackDate,
+        'time'      => $ownTime ? $time : (string)$fallbackTime,
+        'own_date'  => $ownDate,
+        'own_time'  => $ownTime,
+        'inherited' => !$ownDate || !$ownTime,
+    ];
+}
+
+/** A round's slot, falling back to its race. Pass the joined row or both rows. */
+function roundSchedule(array $round, ?array $race = null): array
+{
+    return effectiveSchedule(
+        $round['scheduled_date'] ?? null,
+        $round['scheduled_time'] ?? null,
+        $race['race_date'] ?? $round['race_date'] ?? null,
+        $race['race_time'] ?? $round['race_time'] ?? null
+    );
+}
+
+/** A heat's slot, falling back to its round and then to the race. */
+function heatSchedule(array $heat, array $round, ?array $race = null): array
+{
+    $parent = roundSchedule($round, $race);
+    return effectiveSchedule(
+        $heat['scheduled_date'] ?? null,
+        $heat['scheduled_time'] ?? null,
+        $parent['date'],
+        $parent['time']
+    );
+}
+
+/** "09 Aug 2026 · 3:00 PM" from a resolved slot. */
+function scheduleLabel(array $slot): string
+{
+    return formatDateTime($slot['date'] ?: null, $slot['time'] ?: null);
+}
+
 function avatarInitials(string $name): string
 {
     $words = preg_split('/\s+/', trim($name)) ?: [];

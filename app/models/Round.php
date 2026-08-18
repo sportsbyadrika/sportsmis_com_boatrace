@@ -110,6 +110,57 @@ class Round extends Model
         return static::delete('rounds', ['id' => $id]);
     }
 
+    /**
+     * Set each round's own date/time in one go, from the Event Admin's
+     * schedule screen. $schedules is round id => ['date' => …, 'time' => …];
+     * a blank value clears the override so the round inherits its race again.
+     * Only rounds of the given race are touched.
+     */
+    public static function updateSchedules(int $raceId, array $schedules): int
+    {
+        $own = [];
+        foreach (static::rows("SELECT id FROM rounds WHERE event_race_id = ?", [$raceId]) as $r) {
+            $own[(int)$r['id']] = true;
+        }
+
+        $changed = 0;
+        foreach ($schedules as $id => $slot) {
+            $id = (int)$id;
+            if (!isset($own[$id])) continue;
+
+            $date = trim((string)($slot['date'] ?? ''));
+            $time = trim((string)($slot['time'] ?? ''));
+            $changed += static::update('rounds', [
+                'scheduled_date' => $date !== '' ? $date : null,
+                'scheduled_time' => $time !== '' ? $time : null,
+            ], ['id' => $id]);
+        }
+        return $changed;
+    }
+
+    /**
+     * "Prelims 9:30 AM · Semis 2:00 PM · Final 4:30 PM" — the one-line
+     * summary printed under a race on the programme. Returns '' when no round
+     * carries a slot of its own, so a race that runs straight through prints
+     * nothing extra.
+     */
+    public static function scheduleSummary(int $raceId, array $race): string
+    {
+        $parts = [];
+        foreach (static::forRace($raceId) as $round) {
+            if (empty($round['scheduled_date']) && empty($round['scheduled_time'])) continue;
+            $slot = roundSchedule($round, $race);
+
+            // Repeat the date only when it differs from the race's own.
+            $label = (!empty($round['scheduled_date']) && $round['scheduled_date'] !== ($race['race_date'] ?? null))
+                ? formatDate($slot['date'], 'd M') . ' ' . formatTime($slot['time'])
+                : formatTime($slot['time']);
+
+            $parts[] = $round['name'] . ' ' . $label;
+        }
+        return implode(' · ', $parts);
+    }
+
     public static function nextSortOrder(int $raceId): int
     {
         return (int)static::value(
