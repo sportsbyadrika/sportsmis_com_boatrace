@@ -415,6 +415,111 @@ check('and its label says so', scheduleLabel($s4), '—');
 check('a resolved slot formats as date and time',
     scheduleLabel($s2), '09 Aug 2026 · 10:15 AM');
 
+// ── Choosing which rounds a race runs ───────────────────────────────────────
+// Not every race has the full ladder: many are preliminary heats plus a
+// final, some are a final alone. Rounds are ticked individually, and must end
+// up in ladder order however they were added.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE rounds (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT,
+        name TEXT, round_type TEXT, sort_order INT, lane_count INT, qualify_per_heat INT,
+        scheduled_date TEXT, scheduled_time TEXT, status TEXT, published_at TEXT)');
+    $pdo->exec('CREATE TABLE heats (id INTEGER PRIMARY KEY, round_id INT)');
+    $pdo->exec('CREATE TABLE lane_allocations (id INTEGER PRIMARY KEY, round_id INT)');
+    $pdo->exec('CREATE TABLE results (id INTEGER PRIMARY KEY, round_id INT)');
+
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $EV = 2;
+    $race = ['id' => 55, 'lane_count' => 5];
+    $ladder = function () use ($pdo) {
+        $rows = $pdo->query("SELECT round_type FROM rounds WHERE event_race_id = 55 ORDER BY sort_order, id")
+                    ->fetchAll();
+        return array_column($rows, 'round_type');
+    };
+
+    // Heats and a final only — the common case.
+    check('adding two rounds', \Models\Round::addStandard($EV, $race, ['preliminary', 'final']), 2);
+    check('they sit in ladder order', $ladder(), ['preliminary', 'final']);
+    check('the final qualifies nobody',
+        (int)$pdo->query("SELECT qualify_per_heat FROM rounds WHERE round_type = 'final'")->fetchColumn(), 0);
+    check('lane count comes from the race',
+        (int)$pdo->query("SELECT lane_count FROM rounds WHERE round_type = 'final'")->fetchColumn(), 5);
+
+    // A semi added afterwards must slot BEFORE the final, not after it.
+    check('adding a semi later', \Models\Round::addStandard($EV, $race, ['semi_final']), 1);
+    check('it slots in before the final', $ladder(), ['preliminary', 'semi_final', 'final']);
+    check('sort orders are 1..n',
+        array_column($pdo->query("SELECT sort_order FROM rounds WHERE event_race_id = 55 ORDER BY sort_order")
+                         ->fetchAll(), 'sort_order'), [1, 2, 3]);
+
+    // Ticking one that is already there is a no-op, not a duplicate.
+    check('an existing round is not added twice',
+        \Models\Round::addStandard($EV, $race, ['final']), 0);
+    check('and the ladder is unchanged', $ladder(), ['preliminary', 'semi_final', 'final']);
+    check('existingTypes reports what is there',
+        \Models\Round::existingTypes(55), ['preliminary', 'final', 'semi_final']);
+
+    // Unknown types are ignored rather than creating junk rounds.
+    check('an unknown type is ignored', \Models\Round::addStandard($EV, $race, ['grand_final']), 0);
+
+    // The full four-round ladder, with quarter-finals added LAST — the order
+    // must come from the ladder rank, not from insertion order.
+    $full = ['id' => 57, 'lane_count' => 6];
+    \Models\Round::addStandard($EV, $full, ['final']);
+    \Models\Round::addStandard($EV, $full, ['preliminary']);
+    \Models\Round::addStandard($EV, $full, ['semi_final']);
+    check('quarter-finals can be added', \Models\Round::addStandard($EV, $full, ['quarter_final']), 1);
+    $fullLadder = array_column(
+        $pdo->query("SELECT round_type FROM rounds WHERE event_race_id = 57 ORDER BY sort_order, id")->fetchAll(),
+        'round_type');
+    check('the four-round ladder runs in the right order', $fullLadder,
+        ['preliminary', 'quarter_final', 'semi_final', 'final']);
+    check('and is numbered 1..4',
+        array_column($pdo->query("SELECT sort_order FROM rounds WHERE event_race_id = 57 ORDER BY sort_order")
+                         ->fetchAll(), 'sort_order'), [1, 2, 3, 4]);
+    check('quarter-finals are offered by the model',
+        array_key_exists('quarter_final', \Models\Round::STANDARD_ROUNDS), true);
+
+    // A final on its own, on a different race.
+    $solo = ['id' => 56, 'lane_count' => 4];
+    check('a final-only race', \Models\Round::addStandard($EV, $solo, ['final']), 1);
+    check('and it is that race\'s only round', \Models\Round::existingTypes(56), ['final']);
+    check('the other race is untouched', count(\Models\Round::existingTypes(55)), 3);
+
+    // Deleting: the impact report drives the confirmation, so it must be right.
+    $semiId = (int)$pdo->query("SELECT id FROM rounds WHERE event_race_id = 55 AND round_type = 'semi_final'")
+                       ->fetchColumn();
+    $pdo->exec("INSERT INTO heats (round_id) VALUES ({$semiId}), ({$semiId})");
+    $pdo->exec("INSERT INTO lane_allocations (round_id) VALUES ({$semiId}), ({$semiId}), ({$semiId})");
+    $pdo->exec("INSERT INTO results (round_id) VALUES ({$semiId})");
+    check('deletion impact is counted',
+        \Models\Round::deletionImpact($semiId), ['heats' => 2, 'lanes' => 3, 'results' => 1]);
+
+    \Models\Round::deleteById($semiId);
+    \Models\Round::resequenceByLadder(55);
+    check('the round is gone', $ladder(), ['preliminary', 'final']);
+    check('and the remaining rounds renumber',
+        array_column($pdo->query("SELECT sort_order FROM rounds WHERE event_race_id = 55 ORDER BY sort_order")
+                         ->fetchAll(), 'sort_order'), [1, 2]);
+
+    // A published round must never be removable from the programme side.
+    $pdo->exec("UPDATE rounds SET status = 'published' WHERE event_race_id = 55 AND round_type = 'final'");
+    $final = \Models\Round::findById((int)$pdo->query(
+        "SELECT id FROM rounds WHERE event_race_id = 55 AND round_type = 'final'")->fetchColumn());
+    check('a published round reads as frozen', \Models\Round::isFrozen($final), true);
+    $draft = \Models\Round::findById((int)$pdo->query(
+        "SELECT id FROM rounds WHERE event_race_id = 55 AND round_type = 'preliminary'")->fetchColumn());
+    check('a draft round does not', \Models\Round::isFrozen($draft), false);
+
+    $prop->setValue(null, null);
+}
+
 // ── Race entries: saving the list must not destroy boat photos ──────────────
 // Each entry carries the boat's photo for that race. setEntries() used to
 // delete every row and re-insert, which would have thrown those photos away

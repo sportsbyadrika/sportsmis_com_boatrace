@@ -124,6 +124,23 @@ is no longer wanted, insert what is new, leave the rest untouched — and
 `tools/selftest.php` pins that down: reverting to delete-and-reinsert fails
 three checks.
 
+### A race runs the rounds it actually rows
+
+There is no fixed ladder. `Round::STANDARD_ROUNDS` lists the four a race may
+be given — Preliminary Heats, Quarter-Finals, Semi-Finals, Final — each with
+its default qualifier rule and a **ladder rank**. The Event Admin ticks the
+ones this race runs, which is commonly heats plus a final, and sometimes a
+final alone.
+
+The rank is what makes the tick-list safe: `resequenceByLadder()` orders
+rounds by rank rather than by insertion, so adding quarter-finals to a race
+that already has a final still places them before it. Ordering by insertion
+instead fails three checks in `tools/selftest.php`.
+
+Removing a round takes its heats, lane draw and results with it, so the
+button spells out what goes and a **locked or published round is refused
+outright** — unlocking is the race office's decision, not the programme's.
+
 ### Scheduling cascades: race → round → heat
 
 A regatta is scheduled at three levels, and each level below the race is

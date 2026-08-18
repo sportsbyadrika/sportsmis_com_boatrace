@@ -38,18 +38,61 @@ $raceSlot = ['date' => $race['race_date'], 'time' => $race['race_time']];
   </div>
 </div>
 
+<?php
+  // Which of the standard rounds this race is still missing.
+  $available = array_diff(array_keys($standard), $existingTypes);
+?>
+
+<div class="sms-card p-4 mb-3">
+  <h6 class="fw-bold mb-1"><i class="bi bi-diagram-3 me-2"></i>Which rounds does this race run?</h6>
+  <p class="small text-muted mb-3">
+    Tick only the rounds actually rowed. Many races are preliminary heats and a final; some are a
+    final on its own. They are ordered as a ladder however you add them.
+  </p>
+
+  <?php if (!$available): ?>
+    <p class="small text-muted mb-0">
+      <i class="bi bi-check2-circle text-success me-1"></i>
+      Every standard round is already on this race. Remove one below if it isn&rsquo;t rowed.
+    </p>
+  <?php else: ?>
+    <form method="POST" action="/event-admin/order-of-events/<?= e(hid_race((int)$race['id'])) ?>/rounds">
+      <?= csrf() ?>
+      <div class="row g-2 mb-3">
+        <?php foreach ($standard as $type => [$label, $qualifiers, $rank]):
+                $already = in_array($type, $existingTypes, true); ?>
+          <div class="col-md-6 col-xl-3">
+            <div class="form-check border rounded p-2 ps-4 h-100 <?= $already ? 'bg-light' : '' ?>">
+              <input class="form-check-input" type="checkbox" name="types[]" value="<?= e($type) ?>"
+                     id="rt_<?= e($type) ?>" <?= $already ? 'checked disabled' : '' ?>>
+              <label class="form-check-label small" for="rt_<?= e($type) ?>">
+                <strong><?= e($label) ?></strong>
+                <div class="text-muted">
+                  <?php if ($already): ?>
+                    Already on this race
+                  <?php elseif ($qualifiers > 0): ?>
+                    Top <?= (int)$qualifiers ?> per heat advance
+                  <?php else: ?>
+                    Decides the placings
+                  <?php endif; ?>
+                </div>
+              </label>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Add Ticked Rounds
+      </button>
+    </form>
+  <?php endif; ?>
+</div>
+
 <?php if (!$rounds): ?>
   <div class="sms-empty-state">
-    <i class="bi bi-diagram-3"></i>
+    <i class="bi bi-clock"></i>
     <h5>No rounds yet</h5>
-    <p>
-      Create the standard ladder — Preliminary Heats, Semi-Finals and Final — then give each one
-      its slot. Lane counts and heats stay with the race office.
-    </p>
-    <form method="POST" action="/event-admin/order-of-events/<?= e(hid_race((int)$race['id'])) ?>/seed-rounds">
-      <?= csrf() ?>
-      <button class="btn btn-primary"><i class="bi bi-magic me-1"></i>Create Default Rounds</button>
-    </form>
+    <p>Tick the rounds this race runs above, then give each one its date and time.</p>
   </div>
 <?php else: ?>
   <form method="POST" action="/event-admin/order-of-events/<?= e(hid_race((int)$race['id'])) ?>/schedule">
@@ -69,6 +112,7 @@ $raceSlot = ['date' => $race['race_date'], 'time' => $race['race_time']];
               <th style="width:160px">Time</th>
               <th>Runs at</th>
               <th class="text-center" style="width:90px">Heats</th>
+              <th style="width:56px"></th>
             </tr>
           </thead>
           <tbody>
@@ -109,6 +153,31 @@ $raceSlot = ['date' => $race['race_date'], 'time' => $race['race_time']];
                 <td class="text-center">
                   <span class="badge bg-secondary-subtle text-secondary-emphasis"><?= (int)$r['heat_count'] ?></span>
                 </td>
+                <td class="text-end">
+                  <?php
+                    $frozen = \Models\Round::isFrozen($r);
+                    // Spell out what goes with it, so the confirmation is a
+                    // real decision rather than a reflex.
+                    $loses = [];
+                    if ((int)$r['heat_count'])      $loses[] = (int)$r['heat_count'] . ' heat(s)';
+                    if ((int)$r['allocated_count']) $loses[] = (int)$r['allocated_count'] . ' lane allocation(s)';
+                    if ((int)$r['result_count'])    $loses[] = (int)$r['result_count'] . ' recorded result(s)';
+                    $warn = 'Remove "' . $r['name'] . '" from this race?'
+                          . ($loses ? ' This also deletes ' . implode(', ', $loses) . '.' : '');
+                  ?>
+                  <?php if ($frozen): ?>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled
+                            title="This round is <?= e($r['status']) ?> — the race office must unlock it first">
+                      <i class="bi bi-lock"></i>
+                    </button>
+                  <?php else: ?>
+                    <button type="submit" form="delRound<?= e($rh) ?>"
+                            class="btn btn-sm btn-outline-danger" title="Remove this round"
+                            data-confirm="<?= e($warn) ?>">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  <?php endif; ?>
+                </td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -120,10 +189,18 @@ $raceSlot = ['date' => $race['race_date'], 'time' => $race['race_time']];
     </div>
   </form>
 
+  <?php foreach ($rounds as $r): if (\Models\Round::isFrozen($r)) continue; ?>
+    <form method="POST" id="delRound<?= e(hid_round((int)$r['id'])) ?>"
+          action="/event-admin/order-of-events/<?= e(hid_race((int)$race['id'])) ?>/rounds/<?= e(hid_round((int)$r['id'])) ?>/delete">
+      <?= csrf() ?>
+    </form>
+  <?php endforeach; ?>
+
   <p class="small text-muted mt-2 mb-0">
     <i class="bi bi-info-circle me-1"></i>
     An individual heat can override its round again, from the race office under
     <strong>Rounds &amp; Heats</strong> — useful when one heat of a round is moved.
     The printed programme shows these round times under each race.
+    A locked or published round can&rsquo;t be removed here; the race office unlocks it first.
   </p>
 <?php endif; ?>
