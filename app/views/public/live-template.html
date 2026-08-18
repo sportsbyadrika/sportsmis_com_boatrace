@@ -254,12 +254,12 @@
   async function poll() {
     try {
       var res = await fetch(MANIFEST + '?_=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('manifest ' + res.status);
+      if (!res.ok) throw new Error('manifest.json returned HTTP ' + res.status);
       var m = await res.json();
 
       if (m.version !== version) {
         var pr = await fetch(m.file, { cache: 'force-cache' });
-        if (!pr.ok) throw new Error('payload ' + pr.status);
+        if (!pr.ok) throw new Error(m.file + ' returned HTTP ' + pr.status);
         data = await pr.json();
         version = m.version;
         render();
@@ -271,8 +271,18 @@
       failures++;
       // Keep showing the last good data; say it may be behind rather than
       // blanking a page thousands of people are watching.
-      if (data) setStatus('Reconnecting…', 'stale');
-      else      setStatus('Results are not available yet.', 'down');
+      if (data) {
+        setStatus('Reconnecting…', 'stale');
+      } else {
+        // First load failed and there is nothing to show. Name the reason —
+        // "not available yet" once hid a 403 from a server rule and gave
+        // nobody anything to go on.
+        setStatus(String(err && err.message || 'unavailable'), 'down');
+        el('cards').innerHTML =
+          '<div class="empty">Results are not available right now.' +
+          '<div style="margin-top:6px;font-size:12px;color:#94a3b8">' +
+          esc(String(err && err.message || 'unknown error')) + '</div></div>';
+      }
     } finally {
       // Back off while hidden, and jitter so clients never align.
       var base = document.hidden ? POLL_MS * 3 : POLL_MS;

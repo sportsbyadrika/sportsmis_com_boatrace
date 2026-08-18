@@ -29,6 +29,15 @@ class ResultSnapshot
     /** Older payloads kept so requests already in flight still resolve. */
     private const KEEP_VERSIONS = 3;
 
+    /**
+     * The public filenames this service serves. Declared rather than inferred,
+     * because the directory is generated at runtime: a rule elsewhere that
+     * denies one of these 403s the results for everybody, and the page just
+     * shows nothing. tools/selftest.php checks these against the .htaccess
+     * deny patterns.
+     */
+    public const SERVED_FILES = ['manifest.json', 'results-1.json', 'index.html'];
+
     /** Per-race publication state, in the order the public page shows it. */
     public const STATE_FINAL = 'final';   // the deciding round is published
     public const STATE_ROUND = 'round';   // some earlier round is published
@@ -303,6 +312,13 @@ class ResultSnapshot
         self::atomicWrite($dir . '/.htaccess', <<<HTA
             # Written by Services\ResultSnapshot — edits here are overwritten.
             Options -Indexes
+
+            # Grant these explicitly. A deny rule in a parent directory —
+            # "never serve .json", say — would otherwise 403 the payload and
+            # leave the page loading but empty, with nothing to show why.
+            <FilesMatch "^(manifest\.json|results-\d+\.json|index\.html)$">
+              Require all granted
+            </FilesMatch>
 
             <IfModule mod_headers.c>
               # Versioned payloads never change under their own name.
