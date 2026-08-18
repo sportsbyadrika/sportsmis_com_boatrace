@@ -647,7 +647,14 @@ if (extension_loaded('pdo_sqlite')) {
         // The page must be servable as-is: no PHP left in it.
         $page = (string)file_get_contents($snapDir . '/index.html');
         ok('the published page contains no PHP', !str_contains($page, '<?'));
-        ok('and no unreplaced placeholder', !str_contains($page, '__EVENT_CODE__'));
+        ok('and no unreplaced placeholder',
+            !str_contains($page, '__EVENT_CODE__') && !str_contains($page, '__TEMPLATE_VERSION__'));
+
+        // The stamp is what lets diagnostics tell a stale published page from
+        // a server fault — from a browser the two look identical.
+        ok('the page carries its template version',
+            (bool)preg_match('/name="rg-template" content="(\\d+)"/', $page, $tv)
+            && (int)$tv[1] === \Services\ResultSnapshot::TEMPLATE_VERSION);
 
         // Cache rules are what keep the origin idle under load.
         $hta = (string)file_get_contents($snapDir . '/.htaccess');

@@ -211,6 +211,7 @@ $router->get ('/event-user/reports/heat-sheet/{hash}/pdf',  'EventUserReportCont
 
 $router->get ('/event-user/displays',                      'EventUserDisplayController@index');
 $router->post('/event-user/displays/publish',              'EventUserDisplayController@publishSnapshot');
+$router->get ('/event-user/displays/diagnose',             'EventUserDisplayController@diagnose');
 
 // ═══════════════════════════════════════════════════════ DISPLAY SCREENS (no app session)
 $router->get ('/display',                    'DisplayController@entry');

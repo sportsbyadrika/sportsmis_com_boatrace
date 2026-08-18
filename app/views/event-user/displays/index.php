@@ -108,6 +108,9 @@
           <i class="bi bi-box-arrow-up-right me-1"></i>View
         </a>
       <?php endif; ?>
+      <a href="/event-user/displays/diagnose" class="btn btn-outline-secondary">
+        <i class="bi bi-clipboard-pulse me-1"></i>Diagnose
+      </a>
       <form method="POST" action="/event-user/displays/publish">
         <?= csrf() ?>
         <button class="btn btn-primary"><i class="bi bi-cloud-arrow-up me-1"></i>Publish Now</button>
