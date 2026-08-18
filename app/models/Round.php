@@ -29,6 +29,22 @@ class Round extends Model
         'published' => 'Published',
     ];
 
+    /**
+     * The rounds a race may be given, in ladder order:
+     *   type => [label, qualifiers per heat, ladder rank]
+     *
+     * A race takes whichever of these it actually runs — often only
+     * preliminary heats and a final, sometimes a final alone. The rank fixes
+     * the running order however they were added, so ticking "Semi-Finals"
+     * after a final still places it before that final.
+     */
+    public const STANDARD_ROUNDS = [
+        'preliminary'   => ['Preliminary Heats', 2, 1],
+        'quarter_final' => ['Quarter-Finals',    2, 2],
+        'semi_final'    => ['Semi-Finals',       2, 3],
+        'final'         => ['Final',             0, 4],
+    ];
+
     /** The default ladder offered when a race has no rounds yet. */
     public const DEFAULT_LADDER = [
         ['name' => 'Preliminary Heats', 'round_type' => 'preliminary', 'qualify_per_heat' => 2],
@@ -65,7 +81,8 @@ class Round extends Model
         return static::rows(
             "SELECT ro.*,
                     (SELECT COUNT(*) FROM heats h WHERE h.round_id = ro.id) AS heat_count,
-                    (SELECT COUNT(*) FROM lane_allocations la WHERE la.round_id = ro.id) AS allocated_count
+                    (SELECT COUNT(*) FROM lane_allocations la WHERE la.round_id = ro.id) AS allocated_count,
+                    (SELECT COUNT(*) FROM results re WHERE re.round_id = ro.id) AS result_count
                FROM rounds ro
               WHERE ro.event_race_id = ?
               ORDER BY ro.sort_order, ro.id",
@@ -159,6 +176,83 @@ class Round extends Model
             $parts[] = $round['name'] . ' ' . $label;
         }
         return implode(' · ', $parts);
+    }
+
+    /** Round types this race already has, e.g. ['preliminary','final']. */
+    public static function existingTypes(int $raceId): array
+    {
+        $rows = static::rows("SELECT DISTINCT round_type FROM rounds WHERE event_race_id = ?", [$raceId]);
+        return array_column($rows, 'round_type');
+    }
+
+    /**
+     * Give a race the standard rounds named in $types, skipping any it
+     * already has. Returns the number created.
+     *
+     * Lane count comes from the race; the qualifier rule from the ladder
+     * definition (a final qualifies nobody). The race office can change both
+     * afterwards.
+     */
+    public static function addStandard(int $eventId, array $race, array $types): int
+    {
+        $raceId   = (int)$race['id'];
+        $existing = static::existingTypes($raceId);
+        $added    = 0;
+
+        foreach (array_keys(self::STANDARD_ROUNDS) as $type) {
+            if (!in_array($type, $types, true)) continue;
+            if (in_array($type, $existing, true)) continue;
+
+            [$label, $qualifiers, $rank] = self::STANDARD_ROUNDS[$type];
+            static::insert('rounds', [
+                'event_id'         => $eventId,
+                'event_race_id'    => $raceId,
+                'name'             => $label,
+                'round_type'       => $type,
+                'sort_order'       => $rank,
+                'lane_count'       => (int)($race['lane_count'] ?? 6),
+                'qualify_per_heat' => $qualifiers,
+                'status'           => 'draft',
+            ]);
+            $added++;
+        }
+
+        if ($added > 0) static::resequenceByLadder($raceId);
+        return $added;
+    }
+
+    /**
+     * Renumber a race's rounds 1..n in ladder order, so a round added out of
+     * sequence still runs in the right place. Non-standard rounds keep their
+     * relative position at the end.
+     */
+    public static function resequenceByLadder(int $raceId): void
+    {
+        $rounds = static::rows(
+            "SELECT id, round_type, sort_order FROM rounds WHERE event_race_id = ? ORDER BY sort_order, id",
+            [$raceId]
+        );
+
+        usort($rounds, function ($a, $b) {
+            $rank = fn(string $type) => self::STANDARD_ROUNDS[$type][2] ?? 99;
+            return [$rank($a['round_type']), (int)$a['sort_order'], (int)$a['id']]
+               <=> [$rank($b['round_type']), (int)$b['sort_order'], (int)$b['id']];
+        });
+
+        $n = 1;
+        foreach ($rounds as $round) {
+            static::update('rounds', ['sort_order' => $n++], ['id' => (int)$round['id']]);
+        }
+    }
+
+    /** What deleting this round would take with it, for the confirmation. */
+    public static function deletionImpact(int $roundId): array
+    {
+        return [
+            'heats'   => (int)static::value("SELECT COUNT(*) FROM heats WHERE round_id = ?", [$roundId], 0),
+            'lanes'   => (int)static::value("SELECT COUNT(*) FROM lane_allocations WHERE round_id = ?", [$roundId], 0),
+            'results' => (int)static::value("SELECT COUNT(*) FROM results WHERE round_id = ?", [$roundId], 0),
+        ];
     }
 
     public static function nextSortOrder(int $raceId): int

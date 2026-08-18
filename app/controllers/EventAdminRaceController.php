@@ -200,9 +200,11 @@ class EventAdminRaceController extends EventAdminBase
         $race = $this->raceOr404($hash);
 
         $this->view('event-admin/order-of-events/schedule', [
-            'pageTitle' => 'Schedule — ' . $race['name'],
-            'race'      => $race,
-            'rounds'    => Round::forRace((int)$race['id']),
+            'pageTitle'     => 'Schedule — ' . $race['name'],
+            'race'          => $race,
+            'rounds'        => Round::forRace((int)$race['id']),
+            'standard'      => Round::STANDARD_ROUNDS,
+            'existingTypes' => Round::existingTypes((int)$race['id']),
         ]);
     }
 
@@ -229,35 +231,67 @@ class EventAdminRaceController extends EventAdminBase
     }
 
     /**
-     * Create the standard ladder from the programme side, so an administrator
-     * can lay out and time a race before the race office opens it. Lane counts
-     * and heats stay the race office's business.
+     * Give a race exactly the rounds it runs. Not every race has the full
+     * ladder — many are preliminary heats plus a final, and some are a final
+     * on its own — so the rounds are ticked rather than seeded wholesale.
+     *
+     * Lane counts and heats remain the race office's business.
      */
-    public function seedRounds(string $hash): void
+    public function addRounds(string $hash): void
     {
         $this->boot();
         $this->verifyCsrf();
         $race = $this->raceOr404($hash);
         $back = '/event-admin/order-of-events/' . hid_race((int)$race['id']) . '/schedule';
 
-        if (Round::countForRace((int)$race['id']) > 0) {
-            $this->redirect($back, 'This race already has rounds.', 'error');
+        $types = array_values(array_intersect(
+            (array)($_POST['types'] ?? []),
+            array_keys(Round::STANDARD_ROUNDS)
+        ));
+        if (!$types) {
+            $this->redirect($back, 'Tick at least one round to add.', 'error');
         }
 
-        $order = 1;
-        foreach (Round::DEFAULT_LADDER as $spec) {
-            Round::create([
-                'event_id'         => $this->eventId(),
-                'event_race_id'    => (int)$race['id'],
-                'name'             => $spec['name'],
-                'round_type'       => $spec['round_type'],
-                'sort_order'       => $order++,
-                'lane_count'       => (int)$race['lane_count'],
-                'qualify_per_heat' => $spec['qualify_per_heat'],
-                'status'           => 'draft',
-            ]);
+        $added = Round::addStandard($this->eventId(), $race, $types);
+        $this->redirect($back, $added
+            ? "Added {$added} round" . ($added === 1 ? '' : 's') . ' — give each one its date and time below.'
+            : 'Those rounds are already on this race.');
+    }
+
+    /**
+     * Remove a round from a race, with everything underneath it.
+     *
+     * A locked or published round is refused outright: its results are
+     * already out, and unlocking is a race-office decision. Anything else may
+     * go, but the confirmation on the button spells out what goes with it.
+     */
+    public function destroyRound(string $hash, string $roundHash): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+        $race = $this->raceOr404($hash);
+        $back = '/event-admin/order-of-events/' . hid_race((int)$race['id']) . '/schedule';
+
+        $round = Round::findForEvent($this->eventId(), hid_round_decode($roundHash));
+        if (!$round || (int)$round['event_race_id'] !== (int)$race['id']) $this->abort(404);
+
+        if (Round::isFrozen($round)) {
+            $this->redirect($back,
+                'This round is ' . $round['status'] . '. The race office must unlock it before it can be removed.',
+                'error');
         }
-        $this->redirect($back, 'Rounds created — give each one its date and time below.');
+
+        $impact = Round::deletionImpact((int)$round['id']);
+        Round::deleteById((int)$round['id']);
+        Round::resequenceByLadder((int)$race['id']);
+
+        $lost = [];
+        if ($impact['heats'])   $lost[] = $impact['heats'] . ' heat' . ($impact['heats'] === 1 ? '' : 's');
+        if ($impact['lanes'])   $lost[] = $impact['lanes'] . ' lane allocation' . ($impact['lanes'] === 1 ? '' : 's');
+        if ($impact['results']) $lost[] = $impact['results'] . ' result' . ($impact['results'] === 1 ? '' : 's');
+
+        $this->redirect($back, 'Removed ' . $round['name']
+            . ($lost ? ', along with ' . implode(', ', $lost) . '.' : '.'));
     }
 
     // ── Printable programme ──────────────────────────────────────────────────

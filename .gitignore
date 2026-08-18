@@ -3,8 +3,24 @@ app/.env
 .env
 
 # Composer
-/vendor/
+#
+# vendor/ IS committed. Dompdf is the app's only dependency, it is pure PHP
+# with no build step, and shared hosting frequently has no composer on the
+# deployment shell's PATH — so vendoring it keeps a deploy self-contained and
+# the PDF reports working without one. Regenerate with tools/vendor-refresh.sh,
+# never by hand.
+#
+# What must never be committed: each package's own source-control metadata
+# (git treats a nested .git as a submodule) and its test suite. Together they
+# are ~44 MB of the ~56 MB composer installs.
 composer.phar
+vendor/**/.git/
+vendor/**/.github/
+vendor/**/tests/
+vendor/**/test/
+vendor/**/Tests/
+vendor/**/docs/
+vendor/**/phpunit.xml*
 
 # Uploads (user content) — keep the directories, not the files
 app/public/assets/uploads/**/*
