@@ -415,6 +415,87 @@ check('and its label says so', scheduleLabel($s4), '—');
 check('a resolved slot formats as date and time',
     scheduleLabel($s2), '09 Aug 2026 · 10:15 AM');
 
+// ── Points and placings come from the DECIDING round only ───────────────────
+// The ladder exists so a preliminary does not decide anything. Taking "the
+// last published round" instead would award places and points off the heats
+// while the final was still to be rowed — this pins that shut.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE event_races (id INTEGER PRIMARY KEY, event_id INT, sl_no INT, name TEXT,
+        name_regional TEXT, race_date TEXT, race_time TEXT)');
+    $pdo->exec('CREATE TABLE rounds (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT, name TEXT,
+        round_type TEXT, sort_order INT, status TEXT)');
+    $pdo->exec('CREATE TABLE teams (id INTEGER PRIMARY KEY, club_name TEXT, boat_name TEXT,
+        captain_name TEXT, short_code TEXT, logo TEXT)');
+    $pdo->exec('CREATE TABLE team_registrations (id INTEGER PRIMARY KEY, team_id INT)');
+    $pdo->exec('CREATE TABLE results (id INTEGER PRIMARY KEY, event_id INT, round_id INT, heat_id INT,
+        lane_allocation_id INT, team_registration_id INT, race_time TEXT, position INT,
+        qualified INT, outcome TEXT)');
+
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $EV = 1;
+    $pdo->exec("INSERT INTO event_races (id, event_id, sl_no, name) VALUES (1, 1, 1, 'Chundan Vallam')");
+    // Ladder: preliminary (1) then final (2).
+    $pdo->exec("INSERT INTO rounds (id, event_id, event_race_id, name, round_type, sort_order, status)
+                VALUES (10, 1, 1, 'Preliminary Heats', 'preliminary', 1, 'published'),
+                       (11, 1, 1, 'Final',             'final',       2, 'draft')");
+    $pdo->exec("INSERT INTO teams (id, club_name, boat_name, captain_name) VALUES
+        (1,'NBC','Nadubhagom','A'), (2,'KBC','Karichal','B'), (3,'VBC','Veeyapuram','C')");
+    $pdo->exec("INSERT INTO team_registrations (id, team_id) VALUES (1,1),(2,2),(3,3)");
+    // Heat placings exist and are published.
+    $pdo->exec("INSERT INTO results (event_id, round_id, heat_id, lane_allocation_id,
+                    team_registration_id, race_time, position, qualified, outcome) VALUES
+        (1,10,1,1,1,'4:10.00',1,1,'ok'), (1,10,1,2,2,'4:11.00',2,1,'ok'), (1,10,1,3,3,'4:12.00',3,0,'ok')");
+
+    check('heats published but final not: no points',
+        \Models\Result::medalTally($EV), []);
+    $rank = \Models\Result::rankListForEvent($EV);
+    check('heats published but final not: no placings', $rank[0]['places'], []);
+    check('the deciding round is the final, not the published heat',
+        \Models\Result::decidingRound(1)['name'], 'Final');
+
+    // Publish the final with a DIFFERENT order — the tally must follow it.
+    $pdo->exec("INSERT INTO results (event_id, round_id, heat_id, lane_allocation_id,
+                    team_registration_id, race_time, position, qualified, outcome) VALUES
+        (1,11,2,4,2,'4:05.00',1,0,'ok'), (1,11,2,5,1,'4:06.00',2,0,'ok'), (1,11,2,6,3,'4:07.00',3,0,'ok')");
+    $pdo->exec("UPDATE rounds SET status = 'published' WHERE id = 11");
+
+    $tally = \Models\Result::medalTally($EV);
+    check('the final decides the tally', array_column($tally, 'club_name'), ['KBC', 'NBC', 'VBC']);
+    check('the winner scores 3', (int)$tally[0]['points'], 3);
+    check('and the heats add nothing on top', (int)$tally[1]['points'], 2);
+    check('nobody is double counted', count($tally), 3);
+
+    $rank = \Models\Result::rankListForEvent($EV);
+    check('the rank list reads the final', $rank[0]['round']['name'], 'Final');
+    check('first place is the final winner', $rank[0]['places'][0]['club_name'], 'KBC');
+
+    // A single-round race: that round IS the decider once published.
+    $pdo->exec("INSERT INTO event_races (id, event_id, sl_no, name) VALUES (2, 1, 2, 'Iruttukuthy')");
+    $pdo->exec("INSERT INTO rounds (id, event_id, event_race_id, name, round_type, sort_order, status)
+                VALUES (20, 1, 2, 'Final', 'final', 1, 'published')");
+    $pdo->exec("INSERT INTO results (event_id, round_id, heat_id, lane_allocation_id,
+                    team_registration_id, race_time, position, qualified, outcome) VALUES
+        (1,20,3,7,3,'3:00.00',1,0,'ok')");
+    $tally = \Models\Result::medalTally($EV);
+    $byClub = array_column($tally, 'points', 'club_name');
+    check('a one-round race counts once published', (int)$byClub['VBC'], 1 + 3);
+
+    // A race with no rounds at all must not blow up.
+    $pdo->exec("INSERT INTO event_races (id, event_id, sl_no, name) VALUES (3, 1, 3, 'Unrun')");
+    check('a race with no rounds has no deciding round', \Models\Result::decidingRound(3), null);
+    $rank = \Models\Result::rankListForEvent($EV);
+    check('and appears in the rank list with nothing', $rank[2]['places'], []);
+
+    $prop->setValue(null, null);
+}
+
 // ── Event admin standing in for the race office ─────────────────────────────
 // The administrator owns the event, so they hold every privilege while they
 // are in the race office. The bucket is marked via_admin and carries no
