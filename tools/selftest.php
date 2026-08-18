@@ -1021,6 +1021,20 @@ if (is_file($rootHt)) {
         $guard !== false && $catchAll !== false && $guard < $catchAll);
     ok('root .htaccess denies dotfiles', str_contains($ht, '<FilesMatch "^\\.">'));
 
+    // Files the app serves must not be denied by a parent rule. The results
+    // pages are the trap: their directory is generated at runtime and is not
+    // in the repository, so scanning the disk alone sees nothing — which is
+    // how "deny .json" once 403'd every payload while the page still loaded.
+    foreach (\Services\ResultSnapshot::SERVED_FILES as $served) {
+        $denied = false;
+        if (preg_match_all('/<FilesMatch "([^"]+)">\s*Require all denied/', $ht, $blocks)) {
+            foreach ($blocks[1] as $pattern) {
+                if (@preg_match('#' . $pattern . '#', $served) === 1) { $denied = true; break; }
+            }
+        }
+        ok("the public results page can serve {$served}", !$denied);
+    }
+
     // Nothing served from app/public may carry a denied extension, or the
     // inherited rule would 403 a legitimate asset.
     if (preg_match('/FilesMatch "\\\\\\.\\(([a-z|]+)\\)\\$"/', $ht, $m)) {

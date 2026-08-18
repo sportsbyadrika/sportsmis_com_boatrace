@@ -50,12 +50,21 @@ DirectoryIndex index.php index.html
     Require all denied
 </FilesMatch>
 
-# Repository and configuration files that must never be served. No file with
-# these extensions is served from app/public, so denying them globally costs
-# nothing: the public tree holds only .php, .css, .js, .svg and uploads.
-# (.user.ini is deliberately absent from this list — it is a dotfile, so the
-#  rule above already covers it, and listing it here would read as a clash.)
-<FilesMatch "\.(env|sql|log|md|yml|yaml|json|lock|dist|bak)$">
+# Repository and configuration files that must never be served.
+#
+# NOTE: .json is deliberately NOT in this list. The public results pages are
+# served as static JSON (live/<CODE>/manifest.json and results-<v>.json), and
+# denying the extension wholesale silently 403s every one of them — the page
+# loads and then shows no results, which is exactly how that went wrong once.
+# Repository JSON is denied by NAME below instead.
+#
+# (.user.ini is deliberately absent too — it is a dotfile, so the rule above
+#  already covers it, and listing it here would read as a clash.)
+<FilesMatch "\.(env|sql|log|md|yml|yaml|lock|dist|bak)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^(composer|package|package-lock)\.json$">
     Require all denied
 </FilesMatch>
 
