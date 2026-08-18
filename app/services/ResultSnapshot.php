@@ -38,6 +38,14 @@ class ResultSnapshot
      */
     public const SERVED_FILES = ['manifest.json', 'results-1.json', 'index.html'];
 
+    /**
+     * Bumped whenever views/public/live-template.html changes in a way that
+     * matters. The published index.html carries it, so the diagnostics page
+     * can tell "deployed but never republished" from a genuine server fault —
+     * from a browser the two look identical.
+     */
+    public const TEMPLATE_VERSION = 2;
+
     /** Per-race publication state, in the order the public page shows it. */
     public const STATE_FINAL = 'final';   // the deciding round is published
     public const STATE_ROUND = 'round';   // some earlier round is published
@@ -304,7 +312,12 @@ class ResultSnapshot
     {
         $page = (string)@file_get_contents(APP_ROOT . '/views/public/live-template.html');
         if ($page !== '') {
-            self::atomicWrite($dir . '/index.html', str_replace('__EVENT_CODE__', $code, $page));
+            $page = str_replace(
+                ['__EVENT_CODE__', '__TEMPLATE_VERSION__'],
+                [$code, (string)self::TEMPLATE_VERSION],
+                $page
+            );
+            self::atomicWrite($dir . '/index.html', $page);
         }
 
         // Immutable payloads may be cached forever; the manifest is the only
@@ -316,9 +329,13 @@ class ResultSnapshot
             # Grant these explicitly. A deny rule in a parent directory —
             # "never serve .json", say — would otherwise 403 the payload and
             # leave the page loading but empty, with nothing to show why.
-            <FilesMatch "^(manifest\.json|results-\d+\.json|index\.html)$">
-              Require all granted
-            </FilesMatch>
+            # Guarded: "Require" is Apache 2.4 syntax and a hard error on 2.2,
+            # which would 500 this whole directory instead of fixing anything.
+            <IfModule mod_authz_core.c>
+              <FilesMatch "^(manifest\.json|results-\d+\.json|index\.html)$">
+                Require all granted
+              </FilesMatch>
+            </IfModule>
 
             <IfModule mod_headers.c>
               # Versioned payloads never change under their own name.
