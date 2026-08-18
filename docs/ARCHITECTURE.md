@@ -33,6 +33,33 @@ debugging an event portal doesn't lose their admin session. Per-event
 credentials never touch `users`; uniqueness is per `(event_id, email)`, so one
 person can hold accounts on several regattas with one address.
 
+### The event admin can stand in for the race office
+
+An Event Admin owns their event outright — its teams, programme, and the
+accounts that run it — so there is nothing to escalate by letting them into
+the race office. Without it, publishing one result or putting the LED wall up
+means creating a throwaway Event User account, which is how those proliferate.
+
+**Race Office** in the admin nav (or the panel on their dashboard) opens
+`$_SESSION['event_user']` with `via_admin => true`, `id => 0` and every
+privilege. Three things keep that honest:
+
+- **The flag is never trusted.** `EventUserBase::bootAsAdmin()` re-reads the
+  administrator's own session and account on *every* request, and checks the
+  account is still active and still belongs to that event. The access dies the
+  moment the administrator session does; it cannot be replayed.
+- **It is visible.** A standing banner says whose access it is, the avatar
+  menu reads "Event Admin — in the race office", and the only way out is
+  labelled *Back to Event Admin* rather than Logout — because signing out is
+  not what leaving does.
+- **`?to=` cannot leave the site.** The landing page comes from a whitelist of
+  `/event-user/…` paths, never from the query string. `tools/selftest.php`
+  asserts every entry stays inside the race office, so an open redirect
+  cannot be introduced by adding a row.
+
+A stand-in has no event-user password, so the change-password modal is not
+rendered for one and the endpoint refuses it.
+
 ### One sign-in form
 
 There is a single `/login` taking email + password.
@@ -276,7 +303,57 @@ yet" rather than its semi-final places.
   nav, the dashboard cards and the account form. Adding one means adding a
   `requirePrivilege()` call in the new controller and nothing else.
 
-## 7. Why vendor/ is committed
+## 7. Serving public results at scale
+
+On a big race day the public page is the only part of this system under real
+load — tens of thousands of people refreshing at once, on phones, on a crowded
+network. Nothing dynamic survives that on shared hosting, so the public path
+executes no PHP and touches no database.
+
+### How it works
+
+`Services\ResultSnapshot::publish()` renders the whole event to static files
+under `app/public/live/<EVENT_CODE>/`:
+
+| File | Role | Cache |
+|---|---|---|
+| `manifest.json` | ~150 bytes: current version + payload filename | `max-age=5, stale-while-revalidate=30` |
+| `results-<v>.json` | the payload | `max-age=31536000, immutable` |
+| `index.html` | the page itself, plain HTML + JS | `max-age=60` |
+
+The client polls only the **manifest**. The payload's name changes with its
+version, so it is immutable and fetched exactly once per change — a browser or
+CDN never revalidates it. That is the difference between 30,000 clients pulling
+200 KB every 10 seconds (600 MB/s, hopeless) and pulling 150 bytes on the same
+cadence, mostly served from cache.
+
+### Writes are atomic
+
+Every file goes to a temporary name **in the same directory**, is flushed and
+`fsync`ed, has its permissions set, and is then `rename()`d over the target.
+`rename()` is atomic within a filesystem, so a reader gets the whole old file
+or the whole new one — never a half-written response. Permissions are set
+before the rename, or a reader could catch the file in the instant between
+appearing and becoming readable.
+
+**Ordering matters as much as atomicity:** the payload is written first and the
+manifest last. Until the manifest points at the new payload, clients keep using
+the old one, so the swap is never half-applied. Reversing that order would
+publish a manifest naming a file that does not exist yet.
+
+Old payloads are kept for a few versions so requests already in flight still
+resolve, and stale temp files from an interrupted publish are cleaned up.
+
+### What is NOT solved here
+
+A CDN. This design removes PHP and MySQL from the hot path and makes the
+responses cacheable, which is the necessary half — but a single shared-hosting
+origin still has to serve the first request from every cold client. **Put
+Cloudflare (or any CDN) in front of the subdomain and let it cache `/live/`.**
+The origin then sees a handful of requests per minute regardless of crowd size.
+Without that, the file layout helps but the origin is still the ceiling.
+
+## 8. Why vendor/ is committed
 
 Dompdf is the only dependency. It is pure PHP with no build step, and the
 cPanel deployment shell has no composer on its `PATH` — the guarded
@@ -299,7 +376,7 @@ set regional-language text.
 actually tracks it, and that no package carries a nested `.git` — so this
 cannot silently regress into a dead PDF button again.
 
-## 8. Known gaps
+## 9. Known gaps
 
 - No email delivery, so credentials must be copied from the flash message.
 - No pagination on the team or programme lists; filtering is client-side,

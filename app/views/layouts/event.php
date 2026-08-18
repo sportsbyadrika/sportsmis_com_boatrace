@@ -11,6 +11,7 @@ $eventCode = $ev['code'] ?? '';
 $isAdmin   = \Core\Auth::eventAdminCheck();
 $actor     = $isAdmin ? \Core\Auth::eventAdmin() : (\Core\Auth::eventUser() ?? []);
 $priv      = $actor['privileges'] ?? [];
+$viaAdmin  = !$isAdmin && \Core\Auth::eventUserViaAdmin();
 $logoutUrl = $isAdmin ? '/event-admin/logout' : '/event-user/logout';
 $pwUrl     = $isAdmin ? '/event-admin/password' : '/event-user/password';
 $homeUrl   = $isAdmin ? '/event-admin/dashboard' : '/event-user/dashboard';
@@ -73,6 +74,11 @@ $homeUrl   = $isAdmin ? '/event-admin/dashboard' : '/event-user/dashboard';
               <i class="bi bi-person-badge me-1"></i>Event Users
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/event-admin/race-office">
+              <i class="bi bi-broadcast me-1"></i>Race Office
+            </a>
+          </li>
 
         <?php else: ?>
           <?php if (in_array('rounds_heats', $priv, true)): ?>
@@ -133,23 +139,48 @@ $homeUrl   = $isAdmin ? '/event-admin/dashboard' : '/event-user/dashboard';
             <li>
               <h6 class="dropdown-header">
                 <?= e($actor['email'] ?? '') ?>
-                <br><small class="text-muted fw-normal"><?= $isAdmin ? 'Event Admin' : 'Event User' ?></small>
+                <br><small class="text-muted fw-normal">
+                  <?= $isAdmin ? 'Event Admin' : ($viaAdmin ? 'Event Admin — in the race office' : 'Event User') ?>
+                </small>
               </h6>
             </li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalChangePassword">
-              <i class="bi bi-key me-2"></i>Change Password
-            </a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item text-danger" href="<?= e($logoutUrl) ?>">
-              <i class="bi bi-box-arrow-right me-2"></i>Logout
-            </a></li>
+            <?php if (!$viaAdmin): ?>
+              <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalChangePassword">
+                <i class="bi bi-key me-2"></i>Change Password
+              </a></li>
+              <li><hr class="dropdown-divider"></li>
+            <?php endif; ?>
+            <?php if ($viaAdmin): ?>
+              <li><a class="dropdown-item" href="/event-admin/race-office/exit">
+                <i class="bi bi-box-arrow-left me-2"></i>Back to Event Admin
+              </a></li>
+            <?php else: ?>
+              <li><a class="dropdown-item text-danger" href="<?= e($logoutUrl) ?>">
+                <i class="bi bi-box-arrow-right me-2"></i>Logout
+              </a></li>
+            <?php endif; ?>
           </ul>
         </li>
       </ul>
     </div>
   </div>
 </nav>
+
+<?php if ($viaAdmin): ?>
+  <div class="w-100 py-2 px-4 d-flex align-items-center gap-2 flex-wrap"
+       style="background:#0369a1;color:#fff;font-size:.9rem">
+    <i class="bi bi-person-badge"></i>
+    <span>
+      You are in the <strong>race office</strong> as
+      <strong><?= e($actor['name'] ?? 'the event administrator') ?></strong>,
+      via Event Admin access.
+    </span>
+    <a href="/event-admin/race-office/exit" class="btn btn-sm btn-light ms-auto fw-semibold">
+      <i class="bi bi-box-arrow-left me-1"></i>Back to Event Admin
+    </a>
+  </div>
+<?php endif; ?>
 
 <div class="d-lg-none bg-primary-subtle text-primary-emphasis px-3 py-2 small">
   <i class="bi bi-hash me-1"></i><strong>Event Code:</strong> <?= e($eventCode) ?>
@@ -175,6 +206,7 @@ $homeUrl   = $isAdmin ? '/event-admin/dashboard' : '/event-user/dashboard';
   </div>
 </footer>
 
+<?php if (!$viaAdmin): ?>
 <div class="modal fade" id="modalChangePassword" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -206,6 +238,7 @@ $homeUrl   = $isAdmin ? '/event-admin/dashboard' : '/event-user/dashboard';
     </div>
   </div>
 </div>
+<?php endif; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/assets/js/app.js?v=<?= @filemtime(PUBLIC_ROOT . '/assets/js/app.js') ?: time() ?>"></script>

@@ -32,3 +32,6 @@ app/public/assets/uploads/**/*
 *.log
 .DS_Store
 Thumbs.db
+
+# Generated public results snapshots — rebuilt on publish, never committed.
+app/public/live/

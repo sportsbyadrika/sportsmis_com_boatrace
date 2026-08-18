@@ -203,14 +203,13 @@ class Result extends Model
 
         $out = [];
         foreach ($races as $race) {
-            $round = static::row(
-                "SELECT * FROM rounds
-                  WHERE event_race_id = ? AND status = 'published'
-                  ORDER BY sort_order DESC LIMIT 1",
-                [(int)$race['id']]
-            );
-            if (!$round) {
-                $out[] = ['race' => $race, 'round' => null, 'places' => []];
+            // The deciding round is the LAST round in the ladder — published
+            // or not. Taking the last *published* round instead would let a
+            // preliminary award places and points while its final was still
+            // being rowed, which is the whole point of the ladder.
+            $round = static::decidingRound((int)$race['id']);
+            if (!$round || $round['status'] !== 'published') {
+                $out[] = ['race' => $race, 'round' => $round, 'places' => []];
                 continue;
             }
 
@@ -234,6 +233,30 @@ class Result extends Model
      * Club medal tally across every published final — 1st/2nd/3rd counts
      * plus a simple 3-2-1 points total, ordered as a standings table.
      */
+    /**
+     * A race's deciding round: the last one in its ladder, whatever its
+     * status. Returns null for a race with no rounds at all.
+     *
+     * Deliberately NOT "the last published round" — with heats published and
+     * the final still to row, that would hand the placings to the heats.
+     */
+    public static function decidingRound(int $raceId): ?array
+    {
+        return static::row(
+            "SELECT * FROM rounds WHERE event_race_id = ?
+              ORDER BY sort_order DESC, id DESC LIMIT 1",
+            [$raceId]
+        );
+    }
+
+    /**
+     * Club medal tally: 1st/2nd/3rd counts and a 3-2-1 points total.
+     *
+     * Counts a race only once its DECIDING round is published. A race whose
+     * heats are out but whose final has not been rowed contributes nothing —
+     * the subquery deliberately has no status filter, so the deciding round
+     * is the last in the ladder rather than the last one published.
+     */
     public static function medalTally(int $eventId): array
     {
         return static::rows(
@@ -248,7 +271,7 @@ class Result extends Model
                JOIN teams t               ON t.id  = tr.team_id
               WHERE re.event_id = ? AND re.outcome = 'ok' AND re.position BETWEEN 1 AND 3
                 AND ro.sort_order = (SELECT MAX(r2.sort_order) FROM rounds r2
-                                      WHERE r2.event_race_id = ro.event_race_id AND r2.status = 'published')
+                                      WHERE r2.event_race_id = ro.event_race_id)
               GROUP BY t.club_name
               ORDER BY points DESC, gold DESC, silver DESC, bronze DESC, t.club_name",
             [$eventId]

@@ -46,9 +46,18 @@ class EventUserLaneController extends EventUserBase
         $roundHash = trim((string)($_GET['round'] ?? ''));
         $round     = $roundHash !== '' ? Round::findWithRace($this->eventId(), hid_round_decode($roundHash)) : null;
 
+        // With no round chosen, show the picker rather than an empty board —
+        // a dropdown on a blank page gave no sense of what was left to do.
+        if (!$round) {
+            $this->view('event-user/lane-allocation/pick', [
+                'pageTitle' => 'Lane Allocation',
+                'rounds'    => Round::forEvent($this->eventId()),
+            ]);
+            return;
+        }
+
         $data = [
             'pageTitle' => 'Lane Allocation',
-            'rounds'    => Round::forEvent($this->eventId()),
             'round'     => $round,
             'heats'     => [],
             'lanes'     => [],

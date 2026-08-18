@@ -133,6 +133,9 @@ $router->get ('/event-admin/details',                         'EventAdminControl
 $router->post('/event-admin/details/{panel}/save',            'EventAdminController@saveSection');
 $router->post('/event-admin/details/image',                   'EventAdminController@saveImage');
 
+$router->get ('/event-admin/race-office',                      'EventAdminController@openRaceOffice');
+$router->get ('/event-admin/race-office/exit',                'EventAdminController@exitRaceOffice');
+
 $router->get ('/event-admin/teams',                           'EventAdminTeamController@index');
 $router->get ('/event-admin/teams/import',                    'EventAdminTeamController@importForm');
 $router->get ('/event-admin/teams/import/template',           'EventAdminTeamController@importTemplate');
@@ -161,6 +164,8 @@ $router->get ('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceCo
 $router->post('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceController@saveEntries');
 $router->post('/event-admin/order-of-events/{hash}/entries/{entryHash}/image',        'EventAdminRaceController@entryImage');
 $router->post('/event-admin/order-of-events/{hash}/entries/{entryHash}/image/delete', 'EventAdminRaceController@entryImageDelete');
+$router->post('/event-admin/order-of-events/{hash}/image',      'EventAdminRaceController@raceImage');
+$router->post('/event-admin/order-of-events/{hash}/image/delete','EventAdminRaceController@raceImageDelete');
 $router->post('/event-admin/order-of-events/{hash}/status',    'EventAdminRaceController@setStatus');
 $router->post('/event-admin/order-of-events/{hash}/delete',    'EventAdminRaceController@destroy');
 $router->post('/event-admin/order-of-events/{hash}',           'EventAdminRaceController@update');
@@ -175,6 +180,8 @@ $router->post('/event-admin/users/{hash}/delete',             'EventAdminUserCon
 $router->get ('/event-user/dashboard',                     'EventUserController@dashboard');
 
 $router->get ('/event-user/rounds',                        'EventUserRoundController@index');
+$router->get ('/event-user/rounds/report/print',            'EventUserRoundController@reportPrint');
+$router->get ('/event-user/rounds/report/pdf',              'EventUserRoundController@reportPdf');
 $router->get ('/event-user/rounds/{hash}',                 'EventUserRoundController@show');
 $router->post('/event-user/rounds/{hash}/seed',            'EventUserRoundController@seedLadder');
 $router->post('/event-user/rounds/{hash}/rounds',          'EventUserRoundController@storeRound');
@@ -203,6 +210,7 @@ $router->get ('/event-user/reports/heat-sheet/{hash}/print','EventUserReportCont
 $router->get ('/event-user/reports/heat-sheet/{hash}/pdf',  'EventUserReportController@heatSheetPdf');
 
 $router->get ('/event-user/displays',                      'EventUserDisplayController@index');
+$router->post('/event-user/displays/publish',              'EventUserDisplayController@publishSnapshot');
 
 // ═══════════════════════════════════════════════════════ DISPLAY SCREENS (no app session)
 $router->get ('/display',                    'DisplayController@entry');
@@ -213,5 +221,6 @@ $router->get ('/display/{hash}/stream',      'DisplayController@stream');
 
 // ═══════════════════════════════════════════════════════ PUBLIC (stub)
 $router->get ('/public',                           'PublicController@index');
+$router->get ('/results',                          'PublicController@results');
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

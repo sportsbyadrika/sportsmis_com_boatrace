@@ -62,6 +62,43 @@
   <?php endforeach; ?>
 </div>
 
+<div class="sms-card p-4 mb-4">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-3">
+    <div>
+      <h6 class="fw-bold mb-1"><i class="bi bi-broadcast me-2"></i>Race Office</h6>
+      <p class="text-muted mb-0 small">
+        Run this event yourself — heats and the lane draw, results, reports, and the screens —
+        without creating an Event User account just for the job. You keep your administrator
+        session and can step back at any time.
+      </p>
+    </div>
+    <a href="/event-admin/race-office" class="btn btn-water">
+      <i class="bi bi-box-arrow-in-right me-1"></i>Open Race Office
+    </a>
+  </div>
+
+  <div class="row g-2">
+    <?php
+      $office = [
+        ['Rounds &amp; Heats', 'bi-diagram-3', 'rounds'],
+        ['Lane Allocation',    'bi-water',     'lane-allocation'],
+        ['Result Entry',       'bi-stopwatch', 'results'],
+        ['Reports',            'bi-trophy',    'reports'],
+        ['TV &amp; Broadcast', 'bi-tv',        'displays'],
+      ];
+      foreach ($office as [$title, $icon, $to]):
+    ?>
+      <div class="col-6 col-lg">
+        <a class="sms-action-card h-100 text-center d-block py-3"
+           href="/event-admin/race-office?to=<?= e($to) ?>">
+          <div class="sms-action-icon text-water mx-auto mb-2"><i class="bi <?= e($icon) ?>"></i></div>
+          <div class="small fw-semibold"><?= $title ?></div>
+        </a>
+      </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-lg-6">
     <div class="sms-card h-100">

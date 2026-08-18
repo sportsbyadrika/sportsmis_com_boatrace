@@ -41,6 +41,7 @@
 </div>
 
 <p class="text-muted small text-center mt-3 mb-0">
+  Looking for results? <a href="/results" class="text-decoration-none">View live results</a>.
   Opening a screen at the venue?
   <a href="/display" class="text-decoration-none">Display screens</a>
   are opened with the Event Code, not an account.

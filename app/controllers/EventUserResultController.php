@@ -31,6 +31,15 @@ class EventUserResultController extends EventUserBase
         $roundHash = trim((string)($_GET['round'] ?? ''));
         $round     = $roundHash !== '' ? Round::findWithRace($this->eventId(), hid_round_decode($roundHash)) : null;
 
+        // No round chosen: the picker, not an empty grid.
+        if (!$round) {
+            $this->view('event-user/results/pick', [
+                'pageTitle' => 'Result Entry',
+                'rounds'    => Round::forEvent($this->eventId()),
+            ]);
+            return;
+        }
+
         $heats = [];
         if ($round) {
             foreach (Heat::forRound((int)$round['id']) as $h) {
@@ -41,7 +50,6 @@ class EventUserResultController extends EventUserBase
 
         $this->view('event-user/results/index', [
             'pageTitle' => 'Result Entry',
-            'rounds'    => Round::forEvent($this->eventId()),
             'round'     => $round,
             'heats'     => $heats,
             'nextRound' => $round ? Round::next($round) : null,
@@ -159,7 +167,18 @@ class EventUserResultController extends EventUserBase
             EventRace::updateById((int)$round['event_race_id'], ['status' => 'result_published']);
         }
 
+        // The public page is served from a static snapshot, so publishing a
+        // round has to refresh it — otherwise the result is "published" in the
+        // race office and invisible to everyone outside it. Never let a
+        // snapshot failure undo the publish itself.
+        $note = '';
+        try {
+            \Services\ResultSnapshot::publish($this->eventId());
+        } catch (\Throwable $e) {
+            $note = ' The public results page could not be refreshed — republish it from Displays.';
+        }
+
         $this->json(['success' => true, 'reload' => true,
-                     'message' => 'Round ' . Round::STATUSES[$status] . '.']);
+                     'message' => 'Round ' . Round::STATUSES[$status] . '.' . $note]);
     }
 }

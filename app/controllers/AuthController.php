@@ -238,7 +238,14 @@ class AuthController extends Controller
 
     public function eventUserLogout(): void
     {
+        // An administrator standing in for the race office is not signing out
+        // of anything — send them back to their own workspace.
+        $viaAdmin = Auth::eventUserViaAdmin();
         Auth::eventUserLogout();
+
+        if ($viaAdmin && Auth::eventAdminCheck()) {
+            $this->redirect('/event-admin/dashboard', 'Left the race office.');
+        }
         $this->redirect('/login', 'You have been signed out.');
     }
 
@@ -279,6 +286,13 @@ class AuthController extends Controller
         $this->boot();
         $this->verifyCsrf();
         if (!Auth::eventUserCheck()) $this->redirect('/login');
+
+        // A stand-in has no event-user account; their password is the
+        // administrator one, changed from the administrator workspace.
+        if (Auth::eventUserViaAdmin()) {
+            $this->redirect('/event-admin/dashboard',
+                'You are in the race office as the event administrator — change that password here.', 'warning');
+        }
 
         $id   = (int)Auth::eventUser()['id'];
         $user = EventUser::findById($id);

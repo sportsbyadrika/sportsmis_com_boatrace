@@ -158,6 +158,33 @@ class Auth
         ];
     }
 
+    /**
+     * Open the race office for an event administrator standing in for it.
+     *
+     * The administrator already owns the event, so they hold every privilege
+     * while they are in there. No event_users row exists for them — the
+     * bucket is marked `via_admin` and EventUserBase::boot() re-verifies the
+     * administrator's own session on every request rather than trusting the
+     * flag, so this cannot outlive the session that granted it.
+     */
+    public static function eventUserLoginAsAdmin(array $admin, array $privileges): void
+    {
+        $_SESSION['event_user'] = [
+            'id'         => 0,
+            'name'       => $admin['name'],
+            'email'      => $admin['email'],
+            'event_id'   => (int)$admin['event_id'],
+            'privileges' => array_values($privileges),
+            'via_admin'  => true,
+        ];
+    }
+
+    /** Is the live race-office session an administrator standing in? */
+    public static function eventUserViaAdmin(): bool
+    {
+        return !empty($_SESSION['event_user']['via_admin']);
+    }
+
     public static function eventUserLogout(): void
     {
         unset($_SESSION['event_user']);

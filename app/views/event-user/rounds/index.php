@@ -5,7 +5,17 @@
     <h4 class="fw-bold mb-1">Rounds &amp; Heats</h4>
     <p class="text-muted mb-0 small">Pick a race to lay out its rounds and heats.</p>
   </div>
-  <input type="search" class="form-control w-auto" placeholder="Filter races…" data-filter-for="raceList">
+  <div class="d-flex gap-2 flex-wrap align-items-center">
+    <input type="search" class="form-control w-auto" placeholder="Filter races…" data-filter-for="raceList">
+    <div class="btn-group">
+      <a class="btn btn-outline-dark" target="_blank" rel="noopener" href="/event-user/rounds/report/print">
+        <i class="bi bi-printer me-1"></i>Print
+      </a>
+      <a class="btn btn-outline-dark" target="_blank" rel="noopener" href="/event-user/rounds/report/pdf">
+        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+      </a>
+    </div>
+  </div>
 </div>
 
 <?php if (!$races): ?>

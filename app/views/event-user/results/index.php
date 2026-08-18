@@ -14,35 +14,12 @@ $frozen   = $round ? ($round['status'] === 'published') : false;
       Record a time, a position, or both — blank positions are worked out from the times when you save.
     </p>
   </div>
-  <form method="GET" action="/event-user/results">
-    <select class="form-select" name="round" style="min-width:320px" onchange="this.form.submit()">
-      <option value="">Choose a round…</option>
-      <?php
-        $currentRace = null;
-        foreach ($rounds as $r):
-          if ($currentRace !== $r['race_name']) {
-              if ($currentRace !== null) echo '</optgroup>';
-              $currentRace = $r['race_name'];
-              echo '<optgroup label="' . e((int)$r['race_sl_no'] . '. ' . $r['race_name']) . '">';
-          }
-      ?>
-        <option value="<?= e(hid_round((int)$r['id'])) ?>"
-                <?= $round && (int)$round['id'] === (int)$r['id'] ? 'selected' : '' ?>>
-          <?= e($r['name']) ?> — <?= (int)$r['allocated_count'] ?> drawn
-        </option>
-      <?php endforeach; if ($currentRace !== null) echo '</optgroup>'; ?>
-    </select>
-  </form>
+  <a href="/event-user/results" class="btn btn-outline-secondary">
+    <i class="bi bi-grid me-1"></i>Change round
+  </a>
 </div>
 
-<?php if (!$round): ?>
-  <div class="sms-empty-state">
-    <i class="bi bi-stopwatch"></i>
-    <h5>Choose a round</h5>
-    <p>Pick a round above to record its results.</p>
-  </div>
-
-<?php elseif (!$heats): ?>
+<?php if (!$heats): ?>
   <div class="sms-empty-state">
     <i class="bi bi-grid-3x3"></i>
     <h5>Nothing to score yet</h5>

@@ -415,6 +415,308 @@ check('and its label says so', scheduleLabel($s4), '—');
 check('a resolved slot formats as date and time',
     scheduleLabel($s2), '09 Aug 2026 · 10:15 AM');
 
+// ── Points and placings come from the DECIDING round only ───────────────────
+// The ladder exists so a preliminary does not decide anything. Taking "the
+// last published round" instead would award places and points off the heats
+// while the final was still to be rowed — this pins that shut.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE event_races (id INTEGER PRIMARY KEY, event_id INT, sl_no INT, name TEXT,
+        name_regional TEXT, race_date TEXT, race_time TEXT)');
+    $pdo->exec('CREATE TABLE rounds (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT, name TEXT,
+        round_type TEXT, sort_order INT, status TEXT)');
+    $pdo->exec('CREATE TABLE teams (id INTEGER PRIMARY KEY, club_name TEXT, boat_name TEXT,
+        captain_name TEXT, short_code TEXT, logo TEXT)');
+    $pdo->exec('CREATE TABLE team_registrations (id INTEGER PRIMARY KEY, team_id INT)');
+    $pdo->exec('CREATE TABLE results (id INTEGER PRIMARY KEY, event_id INT, round_id INT, heat_id INT,
+        lane_allocation_id INT, team_registration_id INT, race_time TEXT, position INT,
+        qualified INT, outcome TEXT)');
+
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $EV = 1;
+    $pdo->exec("INSERT INTO event_races (id, event_id, sl_no, name) VALUES (1, 1, 1, 'Chundan Vallam')");
+    // Ladder: preliminary (1) then final (2).
+    $pdo->exec("INSERT INTO rounds (id, event_id, event_race_id, name, round_type, sort_order, status)
+                VALUES (10, 1, 1, 'Preliminary Heats', 'preliminary', 1, 'published'),
+                       (11, 1, 1, 'Final',             'final',       2, 'draft')");
+    $pdo->exec("INSERT INTO teams (id, club_name, boat_name, captain_name) VALUES
+        (1,'NBC','Nadubhagom','A'), (2,'KBC','Karichal','B'), (3,'VBC','Veeyapuram','C')");
+    $pdo->exec("INSERT INTO team_registrations (id, team_id) VALUES (1,1),(2,2),(3,3)");
+    // Heat placings exist and are published.
+    $pdo->exec("INSERT INTO results (event_id, round_id, heat_id, lane_allocation_id,
+                    team_registration_id, race_time, position, qualified, outcome) VALUES
+        (1,10,1,1,1,'4:10.00',1,1,'ok'), (1,10,1,2,2,'4:11.00',2,1,'ok'), (1,10,1,3,3,'4:12.00',3,0,'ok')");
+
+    check('heats published but final not: no points',
+        \Models\Result::medalTally($EV), []);
+    $rank = \Models\Result::rankListForEvent($EV);
+    check('heats published but final not: no placings', $rank[0]['places'], []);
+    check('the deciding round is the final, not the published heat',
+        \Models\Result::decidingRound(1)['name'], 'Final');
+
+    // Publish the final with a DIFFERENT order — the tally must follow it.
+    $pdo->exec("INSERT INTO results (event_id, round_id, heat_id, lane_allocation_id,
+                    team_registration_id, race_time, position, qualified, outcome) VALUES
+        (1,11,2,4,2,'4:05.00',1,0,'ok'), (1,11,2,5,1,'4:06.00',2,0,'ok'), (1,11,2,6,3,'4:07.00',3,0,'ok')");
+    $pdo->exec("UPDATE rounds SET status = 'published' WHERE id = 11");
+
+    $tally = \Models\Result::medalTally($EV);
+    check('the final decides the tally', array_column($tally, 'club_name'), ['KBC', 'NBC', 'VBC']);
+    check('the winner scores 3', (int)$tally[0]['points'], 3);
+    check('and the heats add nothing on top', (int)$tally[1]['points'], 2);
+    check('nobody is double counted', count($tally), 3);
+
+    $rank = \Models\Result::rankListForEvent($EV);
+    check('the rank list reads the final', $rank[0]['round']['name'], 'Final');
+    check('first place is the final winner', $rank[0]['places'][0]['club_name'], 'KBC');
+
+    // A single-round race: that round IS the decider once published.
+    $pdo->exec("INSERT INTO event_races (id, event_id, sl_no, name) VALUES (2, 1, 2, 'Iruttukuthy')");
+    $pdo->exec("INSERT INTO rounds (id, event_id, event_race_id, name, round_type, sort_order, status)
+                VALUES (20, 1, 2, 'Final', 'final', 1, 'published')");
+    $pdo->exec("INSERT INTO results (event_id, round_id, heat_id, lane_allocation_id,
+                    team_registration_id, race_time, position, qualified, outcome) VALUES
+        (1,20,3,7,3,'3:00.00',1,0,'ok')");
+    $tally = \Models\Result::medalTally($EV);
+    $byClub = array_column($tally, 'points', 'club_name');
+    check('a one-round race counts once published', (int)$byClub['VBC'], 1 + 3);
+
+    // A race with no rounds at all must not blow up.
+    $pdo->exec("INSERT INTO event_races (id, event_id, sl_no, name) VALUES (3, 1, 3, 'Unrun')");
+    check('a race with no rounds has no deciding round', \Models\Result::decidingRound(3), null);
+    $rank = \Models\Result::rankListForEvent($EV);
+    check('and appears in the rank list with nothing', $rank[2]['places'], []);
+
+    $prop->setValue(null, null);
+}
+
+// ── Public results snapshot ─────────────────────────────────────────────────
+// The spectator page is static files, so this is the whole public path: if the
+// payload is wrong or a write is not atomic, tens of thousands of people see
+// it. Built end to end against SQLite, into a real temporary directory.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE events (id INTEGER PRIMARY KEY, code TEXT, name TEXT, name_regional TEXT,
+        image TEXT, venue TEXT, start_date TEXT, end_date TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE event_races (id INTEGER PRIMARY KEY, event_id INT, sl_no INT, code TEXT,
+        name TEXT, name_regional TEXT, image TEXT, boat_class TEXT, category TEXT, gender TEXT,
+        distance_m INT, lane_count INT, race_date TEXT, race_time TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE rounds (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT, name TEXT,
+        round_type TEXT, sort_order INT, lane_count INT, qualify_per_heat INT,
+        scheduled_date TEXT, scheduled_time TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE heats (id INTEGER PRIMARY KEY, event_id INT, round_id INT, heat_no INT,
+        name TEXT, scheduled_date TEXT, scheduled_time TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE teams (id INTEGER PRIMARY KEY, event_id INT, club_name TEXT, boat_name TEXT,
+        captain_name TEXT, short_code TEXT, boat_class TEXT, logo TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE team_registrations (id INTEGER PRIMARY KEY, event_id INT, team_id INT, status TEXT)');
+    $pdo->exec('CREATE TABLE race_entries (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT,
+        team_registration_id INT, image TEXT)');
+    $pdo->exec('CREATE TABLE lane_allocations (id INTEGER PRIMARY KEY, event_id INT, round_id INT,
+        heat_id INT, lane_no INT, team_registration_id INT)');
+    $pdo->exec('CREATE TABLE results (id INTEGER PRIMARY KEY, event_id INT, round_id INT, heat_id INT,
+        lane_allocation_id INT, team_registration_id INT, race_time TEXT, time_centis INT,
+        position INT, qualified INT, outcome TEXT, remarks TEXT)');
+
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $pdo->exec("INSERT INTO events (id, code, name, name_regional, venue, start_date, end_date, status)
+        VALUES (1,'RGTEST01','Test Regatta','ടെസ്റ്റ്','Punnamada','2026-08-08','2026-08-09','active')");
+    $pdo->exec("INSERT INTO teams (id,event_id,club_name,boat_name,captain_name,short_code,status) VALUES
+        (1,1,'NBC','Nadubhagom','A','NBC','active'),(2,1,'KBC','Karichal','B','KBC','active'),
+        (3,1,'VBC','Veeyapuram','C','VBC','active')");
+    $pdo->exec("INSERT INTO team_registrations (id,event_id,team_id,status) VALUES
+        (1,1,1,'approved'),(2,1,2,'approved'),(3,1,3,'approved')");
+
+    // Race 1 — final published. Race 2 — only heats published. Race 3 — nothing.
+    $pdo->exec("INSERT INTO event_races (id,event_id,sl_no,name,gender,lane_count,race_date,race_time,status) VALUES
+        (1,1,1,'Chundan Vallam','men',3,'2026-08-09','15:00:00','result_published'),
+        (2,1,2,'Iruttukuthy','open',3,'2026-08-09','16:00:00','in_progress'),
+        (3,1,3,'Veppu Vallam','open',3,'2026-08-09','17:00:00','scheduled')");
+    $pdo->exec("INSERT INTO race_entries (event_id,event_race_id,team_registration_id) VALUES
+        (1,1,1),(1,1,2),(1,1,3),(1,2,1),(1,2,2),(1,3,1),(1,3,2),(1,3,3)");
+    $pdo->exec("INSERT INTO rounds (id,event_id,event_race_id,name,round_type,sort_order,lane_count,
+        qualify_per_heat,status) VALUES
+        (1,1,1,'Preliminary Heats','preliminary',1,3,2,'published'),
+        (2,1,1,'Final','final',2,3,0,'published'),
+        (3,1,2,'Preliminary Heats','preliminary',1,3,2,'published'),
+        (4,1,2,'Final','final',2,3,0,'draft'),
+        (5,1,3,'Final','final',1,3,0,'draft')");
+    $pdo->exec("INSERT INTO heats (id,event_id,round_id,heat_no,name,status) VALUES
+        (1,1,1,1,'Heat 1','finished'),(2,1,2,1,'Final','finished'),(3,1,3,1,'Heat 1','finished')");
+    $pdo->exec("INSERT INTO lane_allocations (id,event_id,round_id,heat_id,lane_no,team_registration_id) VALUES
+        (1,1,1,1,1,1),(2,1,1,1,2,2),(3,1,1,1,3,3),
+        (4,1,2,2,1,2),(5,1,2,2,2,1),(6,1,2,2,3,3),
+        (7,1,3,3,1,1),(8,1,3,3,2,2)");
+    $pdo->exec("INSERT INTO results (event_id,round_id,heat_id,lane_allocation_id,team_registration_id,
+        race_time,position,qualified,outcome) VALUES
+        (1,1,1,1,1,'4:10.000',1,1,'ok'),(1,1,1,2,2,'4:11.000',2,1,'ok'),(1,1,1,3,3,'4:12.000',3,0,'ok'),
+        (1,2,2,4,2,'4:05.000',1,0,'ok'),(1,2,2,5,1,'4:06.000',2,0,'ok'),(1,2,2,6,3,'4:07.000',3,0,'ok'),
+        (1,3,3,7,1,'3:59.000',1,1,'ok'),(1,3,3,8,2,'4:00.000',2,1,'ok')");
+
+    // Publish into a scratch directory rather than the real public tree.
+    $liveRoot = sys_get_temp_dir() . '/rg-live-' . getmypid();
+    @mkdir($liveRoot, 0755, true);
+    $realPublic = PUBLIC_ROOT;
+    $snapDir = null;
+
+    // ResultSnapshot::directory() is built from PUBLIC_ROOT, which is a
+    // constant — so drive the writer through a subclass-free path by
+    // publishing and then reading from wherever it actually wrote.
+    try {
+        $out = \Services\ResultSnapshot::publish(1);
+        $snapDir = PUBLIC_ROOT . '/live/RGTEST01';
+
+        ok('publish reports a version', ($out['version'] ?? 0) >= 1);
+        check('publish counts every race', $out['races'], 3);
+        ok('manifest was written',  is_file($snapDir . '/manifest.json'));
+        ok('payload was written',   is_file($snapDir . '/results-' . $out['version'] . '.json'));
+        ok('the static page was written', is_file($snapDir . '/index.html'));
+        ok('cache rules were written',    is_file($snapDir . '/.htaccess'));
+        ok('no temporary file is left behind', glob($snapDir . '/.tmp-*') === []);
+
+        $manifest = json_decode((string)file_get_contents($snapDir . '/manifest.json'), true);
+        check('the manifest points at the payload',
+            $manifest['file'], 'results-' . $out['version'] . '.json');
+        ok('the manifest is small enough to poll',
+            filesize($snapDir . '/manifest.json') < 300);
+
+        // Guard the decode: if the payload is missing, report it rather than
+        // fataling on the first dereference and losing every later check.
+        $payloadPath = $snapDir . '/' . ($manifest['file'] ?? '');
+        $payload = is_file($payloadPath)
+            ? json_decode((string)file_get_contents($payloadPath), true)
+            : null;
+        ok('the payload the manifest names can be read', is_array($payload));
+        $payload = is_array($payload)
+            ? $payload
+            : ['event' => [], 'races' => [], 'tally' => []];
+
+        check('the payload names the event', $payload['event']['name'] ?? null, 'Test Regatta');
+        check('the payload keeps the regional name', $payload['event']['regional'] ?? null, 'ടെസ്റ്റ്');
+        check('the payload carries every race', count($payload['races']), 3);
+
+        // Race 1: final published -> final placings, in the FINAL's order.
+        $blank = ['state' => null, 'label' => null, 'places' => [], 'qualified' => [], 'teams' => []];
+        $r1 = $payload['races'][0] ?? $blank;
+        check('a settled race reads as final', $r1['state'], 'final');
+        check('and is labelled for the public', $r1['label'], 'Final Result');
+        check('its placings come from the final', array_column($r1['places'], 'club'),
+            ['KBC', 'NBC', 'VBC']);
+        check('with times', $r1['places'][0]['time'] ?? null, '4:05.000');
+        ok('a settled race carries no entry list', !isset($r1['teams']));
+
+        // Race 2: only heats published -> round-wise, naming the round.
+        $r2 = $payload['races'][1] ?? $blank;
+        check('a part-run race reads as round-wise', $r2['state'], 'round');
+        check('and is labelled as such', $r2['label'], 'Round Result');
+        check('it names the round', $r2['round'], 'Preliminary Heats');
+        check('and lists the qualifiers', count($r2['qualified']), 2);
+        ok('a round-wise race shows no final placings', !isset($r2['places']));
+
+        // Race 3: nothing published -> the entry list only.
+        $r3 = $payload['races'][2] ?? $blank;
+        check('an unpublished race reads as not published', $r3['state'], 'none');
+        check('and says so', $r3['label'], 'Not Published');
+        check('it lists the entered boats', count($r3['teams']), 3);
+        ok('and shows no results at all',
+            !isset($r3['places']) && !isset($r3['qualified']));
+
+        // The tally follows the deciding round only — race 2's heats add nothing.
+        $byClub = array_column($payload['tally'], 'points', 'club');
+        check('only the settled race scores', $byClub, ['KBC' => 3, 'NBC' => 2, 'VBC' => 1]);
+
+        // Publishing again bumps the version and leaves a valid manifest.
+        $again = \Services\ResultSnapshot::publish(1);
+        check('republishing bumps the version', $again['version'], $out['version'] + 1);
+        $m2 = json_decode((string)file_get_contents($snapDir . '/manifest.json'), true);
+        check('the manifest follows the new payload', $m2['file'], 'results-' . $again['version'] . '.json');
+        ok('the new payload exists', is_file($snapDir . '/' . $m2['file']));
+        ok('the manifest never points at a missing file', is_file($snapDir . '/' . $m2['file']));
+
+        // The page must be servable as-is: no PHP left in it.
+        $page = (string)file_get_contents($snapDir . '/index.html');
+        ok('the published page contains no PHP', !str_contains($page, '<?'));
+        ok('and no unreplaced placeholder', !str_contains($page, '__EVENT_CODE__'));
+
+        // Cache rules are what keep the origin idle under load.
+        $hta = (string)file_get_contents($snapDir . '/.htaccess');
+        ok('versioned payloads are cached immutably', str_contains($hta, 'immutable'));
+        ok('the manifest is short-lived', str_contains($hta, 'max-age=5'));
+    } finally {
+        // Leave the public tree exactly as found.
+        if ($snapDir && is_dir($snapDir)) {
+            foreach (glob($snapDir . '/*') ?: [] as $f) @unlink($f);
+            foreach (glob($snapDir . '/.*') ?: [] as $f) { if (is_file($f)) @unlink($f); }
+            @rmdir($snapDir);
+            @rmdir(dirname($snapDir));
+        }
+        @rmdir($liveRoot);
+        $prop->setValue(null, null);
+    }
+}
+
+// ── Event admin standing in for the race office ─────────────────────────────
+// The administrator owns the event, so they hold every privilege while they
+// are in the race office. The bucket is marked via_admin and carries no
+// account id, because no event_users row exists behind it.
+$admin = ['id' => 9, 'name' => 'Ann Admin', 'email' => 'ann@example.com',
+          'event_id' => 4, 'password' => '$2y$12$notarealhash', 'status' => 'active'];
+
+\Core\Auth::eventUserLoginAsAdmin($admin, array_keys(\Models\EventUser::PRIVILEGES));
+check('the race-office bucket opens',        \Core\Auth::eventUserCheck(), true);
+check('and is marked as a stand-in',         \Core\Auth::eventUserViaAdmin(), true);
+check('it carries no event-user account id', \Core\Auth::eventUser()['id'], 0);
+check('it is scoped to the administrator\'s event', \Core\Auth::eventUser()['event_id'], 4);
+check('the stand-in holds every privilege',
+    \Core\Auth::eventUser()['privileges'], array_keys(\Models\EventUser::PRIVILEGES));
+foreach (array_keys(\Models\EventUser::PRIVILEGES) as $priv) {
+    ok("stand-in can {$priv}", \Core\Auth::eventUserCan($priv));
+}
+
+// Nothing from the account row may leak into the session.
+$leaked = [];
+foreach (\Core\Auth::eventUser() as $k => $v) {
+    if (is_string($v) && str_starts_with($v, '$2y$')) $leaked[] = $k;
+}
+check('no password material reaches the bucket', $leaked, []);
+
+// Leaving restores the plain state.
+\Core\Auth::eventUserLogout();
+check('leaving closes the race-office bucket', \Core\Auth::eventUserCheck(), false);
+check('and clears the stand-in flag',          \Core\Auth::eventUserViaAdmin(), false);
+
+// A real event-user session must never read as a stand-in.
+\Core\Auth::eventUserLogin(
+    ['id' => 12, 'name' => 'Ravi', 'email' => 'ravi@example.com', 'event_id' => 4],
+    ['reports']
+);
+check('a genuine event user is not a stand-in', \Core\Auth::eventUserViaAdmin(), false);
+check('and keeps only its own privileges', \Core\Auth::eventUser()['privileges'], ['reports']);
+ok('and cannot do what it was not granted', !\Core\Auth::eventUserCan('result_entry'));
+\Core\Auth::eventUserLogout();
+
+// ?to= picks the landing page, so the whitelist must never allow a redirect
+// off this site — an open redirect is exactly how that goes wrong.
+$pages = new ReflectionClassConstant(\Controllers\EventAdminController::class, 'RACE_OFFICE_PAGES');
+$destinations = $pages->getValue();
+ok('the landing whitelist is not empty', $destinations !== []);
+foreach ($destinations as $key => $path) {
+    ok("landing '{$key}' stays inside the race office",
+        is_string($path) && str_starts_with($path, '/event-user/') && !str_contains($path, '//'));
+}
+ok('the default landing page exists', isset($destinations['dashboard']));
+
 // ── Choosing which rounds a race runs ───────────────────────────────────────
 // Not every race has the full ladder: many are preliminary heats plus a
 // final, some are a final alone. Rounds are ticked individually, and must end
@@ -736,6 +1038,19 @@ if (is_file($rootHt)) {
     }
 }
 
+// ── Order of Events report: the masthead must repeat on every page ──────────
+// Dompdf paints a `position: fixed` block on each page; the @page top margin
+// has to clear it or the header overlaps the table. Both halves are required,
+// and losing either is invisible until someone prints a long programme.
+$reportTpl = APP_ROOT . '/views/event-user/rounds/report-pdf.php';
+if (is_file($reportTpl)) {
+    $tpl = (string)file_get_contents($reportTpl);
+    ok('the report masthead is position:fixed (repeats per page)',
+        (bool)preg_match('/#masthead\s*\{[^}]*position:\s*fixed/s', $tpl));
+    ok('the report reserves a top margin for it',
+        (bool)preg_match('/@page\s*\{\s*margin:\s*(\d+)mm/', $tpl, $mm) && (int)$mm[1] >= 25);
+}
+
 // ── PDF pipeline ────────────────────────────────────────────────────────────
 // vendor/ ships with the repository so the PDF routes work without composer
 // on the server. If it ever stops being committed, the reports go dead on the
@@ -827,6 +1142,34 @@ if (!class_exists(\Dompdf\Dompdf::class)) {
     $pdf = \Core\Pdf::render($render('event-user/reports/heat-sheet-pdf',
         compact('event', 'round', 'heats', 'logo', 'footer')), 'A4', 'portrait', true);
     ok('heat-sheet PDF renders', str_starts_with($pdf, '%PDF-') && strlen($pdf) > 1000);
+
+    // Order of Events report — deliberately long enough to break across pages,
+    // so the repeating masthead is exercised rather than assumed.
+    $mkHeat = fn(int $n) => ['id' => $n, 'heat_no' => $n, 'name' => "Heat {$n}",
+        'scheduled_date' => '2026-08-08', 'scheduled_time' => '09:30:00', 'allocated_count' => 4];
+    $mkRound = fn(string $name, string $type, int $order, int $heats) => [
+        'id' => $order, 'name' => $name, 'round_type' => $type, 'sort_order' => $order,
+        'lane_count' => 5, 'qualify_per_heat' => $type === 'final' ? 0 : 2, 'status' => 'draft',
+        'scheduled_date' => null, 'scheduled_time' => null, 'heat_count' => $heats,
+        'heats' => array_map($mkHeat, range(1, $heats))];
+    $races = [];
+    for ($i = 1; $i <= 14; $i++) {
+        $races[] = ['id' => $i, 'sl_no' => $i, 'name' => "Race Number {$i} Chundan Vallam",
+            'name_regional' => 'ചുണ്ടൻ വള്ളം', 'gender' => 'men', 'boat_class' => 'Chundan Vallam',
+            'distance_m' => 1400, 'lane_count' => 5, 'race_date' => '2026-08-08',
+            'race_time' => '09:30:00', 'status' => 'scheduled',
+            'rounds' => [$mkRound('Preliminary Heats', 'preliminary', 1, 3),
+                         $mkRound('Final', 'final', 2, 1)]];
+    }
+    $pdf = \Core\Pdf::render($render('event-user/rounds/report-pdf',
+        compact('event', 'races', 'logo', 'footer')), 'A4', 'portrait', true);
+    ok('rounds report PDF renders', str_starts_with($pdf, '%PDF-'));
+
+    // Page objects sit outside the compressed content streams, so they can be
+    // counted without a PDF library.
+    preg_match_all('#/Type\s*/Page[^s]#', $pdf, $pageObjects);
+    ok('the rounds report spans several pages (' . count($pageObjects[0]) . ')',
+        count($pageObjects[0]) > 1);
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────

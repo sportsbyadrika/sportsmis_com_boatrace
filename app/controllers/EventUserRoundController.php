@@ -1,7 +1,8 @@
 <?php
 namespace Controllers;
 
-use Models\{EventRace, Round, Heat};
+use Core\Pdf;
+use Models\{EventRace, Round, Heat, AppSetting};
 
 /**
  * Race office -> Rounds & Heats (privilege: rounds_heats).
@@ -60,6 +61,67 @@ class EventUserRoundController extends EventUserBase
             'rounds'      => $rounds,
             'entryCount'  => count(EventRace::entryRegistrationIds((int)$race['id'])),
         ]);
+    }
+
+    /**
+     * Order of Events report — the programme expanded down to its rounds and
+     * heats, as a PDF for the race office and the officials' table.
+     *
+     * The masthead repeats on every page (a Dompdf `position: fixed` block),
+     * and the page footer is stamped through the canvas because CSS
+     * counter(pages) reports 0 under Dompdf.
+     */
+    public function reportPdf(): void
+    {
+        $this->boot();
+        $this->requirePrivilege('rounds_heats');
+
+        $html = $this->renderToString('event-user/rounds/report-pdf', [
+            'event'  => $this->event,
+            'races'  => $this->reportRows(),
+            'logo'   => Pdf::imageDataUri($this->event['image'] ?? ''),
+            'footer' => AppSetting::get('programme_footer', 'Powered by SportsMIS® Regatta'),
+        ]);
+        Pdf::stream($html, 'order-of-events-rounds.pdf', 'A4', 'portrait', true);
+    }
+
+    /** The same report as a browser print view. */
+    public function reportPrint(): void
+    {
+        $this->boot();
+        $this->requirePrivilege('rounds_heats');
+
+        $this->renderWith('print', 'event-user/rounds/report', [
+            'pageTitle' => 'Order of Events — ' . $this->event['name'],
+            'event'     => $this->event,
+            'races'     => $this->reportRows(),
+            'footer'    => AppSetting::get('programme_footer', 'Powered by SportsMIS® Regatta'),
+        ]);
+    }
+
+    /** Every race with its rounds, and each round with its heats. */
+    private function reportRows(): array
+    {
+        $rows = [];
+        foreach (EventRace::withRounds($this->eventId()) as $race) {
+            $rounds = Round::forRace((int)$race['id']);
+            foreach ($rounds as &$round) {
+                $round['heats'] = Heat::forRound((int)$round['id']);
+            }
+            unset($round);
+            $race['rounds'] = $rounds;
+            $rows[] = $race;
+        }
+        return $rows;
+    }
+
+    /** Capture a view's output instead of echoing it (for the PDF body). */
+    private function renderToString(string $view, array $data): string
+    {
+        extract($data);
+        ob_start();
+        require APP_ROOT . "/views/{$view}.php";
+        return (string)ob_get_clean();
     }
 
     // ── Rounds ───────────────────────────────────────────────────────────────

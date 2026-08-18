@@ -309,6 +309,12 @@ class Schema extends Model
             ");
         }
 
+        // The picture shown on the public race card. Falls back to the event
+        // image when a race has none of its own.
+        if (self::tableExists('event_races') && !self::columnExists('event_races', 'image')) {
+            static::query("ALTER TABLE event_races ADD COLUMN image VARCHAR(255) NULL AFTER name_regional");
+        }
+
         // race_entries: which registered boats are contesting which race.
         if (!self::tableExists('race_entries')) {
             static::query("

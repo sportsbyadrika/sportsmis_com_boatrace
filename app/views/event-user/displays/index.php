@@ -79,6 +79,50 @@
 </div>
 
 <div class="sms-card p-4 mt-3">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div class="min-w-0">
+      <h6 class="fw-bold mb-1"><i class="bi bi-globe me-2"></i>Public Results Page</h6>
+      <p class="small text-muted mb-2">
+        The spectator page is served as <strong>static files</strong> — no PHP and no database on
+        the request — so it holds up when tens of thousands of people refresh at once. It is
+        rebuilt automatically every time you publish a round.
+      </p>
+      <?php if ($manifest): ?>
+        <div class="small">
+          <span class="badge bg-success"><i class="bi bi-check-lg me-1"></i>Published</span>
+          <span class="text-muted ms-1">
+            version <?= (int)($manifest['version'] ?? 0) ?>
+            &middot; <?= e(formatDate((string)($manifest['updated'] ?? ''), 'd M Y, g:i A')) ?>
+          </span>
+        </div>
+      <?php else: ?>
+        <div class="small">
+          <span class="badge bg-secondary">Not published yet</span>
+          <span class="text-muted ms-1">Publish once to create the page.</span>
+        </div>
+      <?php endif; ?>
+    </div>
+    <div class="d-flex gap-2 flex-wrap align-items-start">
+      <?php if ($manifest): ?>
+        <a href="<?= e($publicUrl) ?>" target="_blank" rel="noopener" class="btn btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>View
+        </a>
+      <?php endif; ?>
+      <form method="POST" action="/event-user/displays/publish">
+        <?= csrf() ?>
+        <button class="btn btn-primary"><i class="bi bi-cloud-arrow-up me-1"></i>Publish Now</button>
+      </form>
+    </div>
+  </div>
+  <?php if ($manifest): ?>
+    <div class="input-group input-group-sm mt-3">
+      <span class="input-group-text">Public URL</span>
+      <input type="text" class="form-control" readonly value="<?= e(url($publicUrl)) ?>" onfocus="this.select()">
+    </div>
+  <?php endif; ?>
+</div>
+
+<div class="sms-card p-4 mt-3">
   <h6 class="fw-bold mb-2"><i class="bi bi-key me-2"></i>Opening a screen on a venue machine</h6>
   <p class="small text-muted mb-2">
     Neither screen needs an app login. On the venue PC, open
