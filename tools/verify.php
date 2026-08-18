@@ -102,8 +102,12 @@ if ($nodeCode === 0) {
         if (!preg_match_all('#<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>#s', $src, $blocks)) continue;
         foreach ($blocks[1] as $i => $js) {
             if (trim($js) === '') continue;
-            // A block that interpolates PHP isn't standalone JavaScript.
-            if (str_contains($js, '<?')) continue;
+            // A block with PHP control flow isn't standalone JavaScript, but
+            // one that only interpolates values is — stub each short-echo tag
+            // with a literal so the surrounding syntax can still be checked.
+            // (A close tag must not appear in this comment; it would end PHP.)
+            if (str_contains($js, '<?php')) continue;
+            $js = preg_replace('/<\?=.*?\?>/s', '0', $js);
             $checked['js']++;
             $tmp = sys_get_temp_dir() . '/verify-' . getmypid() . "-{$i}.js";
             file_put_contents($tmp, $js);

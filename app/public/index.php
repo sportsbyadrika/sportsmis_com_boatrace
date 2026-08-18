@@ -185,6 +185,15 @@ $router->get ('/event-user/reports/rank-list/pdf',         'EventUserReportContr
 $router->get ('/event-user/reports/heat-sheet/{hash}/print','EventUserReportController@heatSheetPrint');
 $router->get ('/event-user/reports/heat-sheet/{hash}/pdf',  'EventUserReportController@heatSheetPdf');
 
+$router->get ('/event-user/displays',                      'EventUserDisplayController@index');
+
+// ═══════════════════════════════════════════════════════ DISPLAY SCREENS (no app session)
+$router->get ('/display',                    'DisplayController@entry');
+$router->post('/display/open',               'DisplayController@open');
+$router->get ('/display/{hash}/wall',        'DisplayController@wall');
+$router->get ('/display/{hash}/feed',        'DisplayController@wallFeed');
+$router->get ('/display/{hash}/stream',      'DisplayController@stream');
+
 // ═══════════════════════════════════════════════════════ PUBLIC (stub)
 $router->get ('/public',                           'PublicController@index');
 
