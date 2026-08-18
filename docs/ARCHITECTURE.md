@@ -344,6 +344,28 @@ publish a manifest naming a file that does not exist yet.
 Old payloads are kept for a few versions so requests already in flight still
 resolve, and stale temp files from an interrupted publish are cleaned up.
 
+### What the page shows
+
+A race card is a **summary**: the thumbnail, the state badge, and the top three
+rows — placings if the deciding round is published, qualifiers if only an
+earlier round is out, entered boats if nothing is. Tapping the card opens the
+full list.
+
+The detail view is a bottom sheet on a phone and a dialog on a desktop, built
+on `<dialog>` with a fallback for browsers without `showModal()`. It is **not
+a plain modal**: every race is addressable at `#race-<sl>`, so opening one
+pushes a history entry. That buys three things a modal normally costs —
+a result can be shared as a link, the back button closes the sheet instead of
+leaving the page, and someone arriving on a shared link lands directly on that
+race.
+
+The rows themselves are a badge, a two-line name block and a time, laid out
+with flex. The name block must be a **block-level box**: as inline spans the
+boat and the club ignored `overflow`/`text-overflow`/`white-space` entirely,
+printed on the same line, and ran across the finishing time — the layout bug
+this cost a race day to notice. `tools/ui-test.js` measures the boxes in a real
+browser at three profiles; restoring the inline spans fails it six times.
+
 ### What is NOT solved here
 
 A CDN. This design removes PHP and MySQL from the hot path and makes the
@@ -386,3 +408,6 @@ cannot silently regress into a dead PDF button again.
 - `tools/selftest.php` covers the pure logic and the PDF pipeline; the
   database-backed paths have no automated test because the build environment
   has no MySQL.
+- `tools/ui-test.js` is optional: it needs Node, `playwright-core` and a
+  Chromium build, none of which the hosting account has. It is a development
+  check, not part of a deploy.
