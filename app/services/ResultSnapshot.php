@@ -44,7 +44,7 @@ class ResultSnapshot
      * can tell "deployed but never republished" from a genuine server fault —
      * from a browser the two look identical.
      */
-    public const TEMPLATE_VERSION = 2;
+    public const TEMPLATE_VERSION = 3;
 
     /** Per-race publication state, in the order the public page shows it. */
     public const STATE_FINAL = 'final';   // the deciding round is published

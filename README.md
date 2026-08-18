@@ -163,6 +163,19 @@ php tools/verify.php     # lint, route→method arity, view/layout targets, inli
 php tools/selftest.php   # time parsing, ordinals, hidden ids, seed hash, PDF rendering
 ```
 
+A third check is optional, because it needs Node and a browser rather than PHP:
+
+```bash
+npm i playwright-core && node tools/ui-test.js    # public results page layout
+```
+
+It serves the public results page over a fixture payload and measures the
+rendered boxes in Chromium at three profiles — a phone, a desktop, and a
+browser too old for `dialog.showModal()`. Layout is the feature on that page,
+and no amount of reading PHP catches a name printing over a finishing time. It
+skips itself with exit 0 when Node, `playwright-core` or Chromium is missing.
+Add `--shots <dir>` for screenshots.
+
 `tools/verify.php` catches the mistakes this architecture actually invites — a
 route pointing at a method that doesn't exist, a `renderWith()` naming a view
 that was never written, a controller path parameter count that doesn't match
@@ -187,7 +200,7 @@ app/
   public/       index.php (bootstrap + every route), .htaccess, assets/
 database/       schema.sql, seeds.sql
 docs/           ARCHITECTURE.md
-tools/          verify.php, selftest.php
+tools/          verify.php, selftest.php, ui-test.js, publish-snapshots.php
 ```
 
 ---

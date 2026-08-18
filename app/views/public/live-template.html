@@ -18,6 +18,7 @@
   *,*::before,*::after{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
        font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45}
+  body.locked{overflow:hidden}
   a{color:inherit}
   .wrap{max-width:1100px;margin:0 auto;padding:0 14px}
 
@@ -44,34 +45,40 @@
   .grid{display:grid;gap:12px;padding:14px 0 28px;
         grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
   .card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;
-        box-shadow:0 1px 3px rgba(15,23,42,.05);display:flex;flex-direction:column}
+        box-shadow:0 1px 3px rgba(15,23,42,.05);display:flex;flex-direction:column;cursor:pointer}
+  .card:hover{box-shadow:0 4px 14px rgba(15,23,42,.10)}
   .thumb{aspect-ratio:16/7;background:#e2e8f0 center/cover no-repeat;position:relative}
   .thumb .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
              color:#94a3b8;font-size:30px}
   .pill{position:absolute;top:9px;right:9px;font-size:11px;font-weight:700;padding:4px 9px;
         border-radius:999px;color:#fff;letter-spacing:.02em;box-shadow:0 1px 4px rgba(0,0,0,.2)}
   .pill.final{background:#16a34a}.pill.round{background:#0369a1}.pill.none{background:#64748b}
-  .cbody{padding:12px 13px 13px}
+  .cbody{padding:12px 13px 13px;display:flex;flex-direction:column;flex:1}
   .rno{font-size:11px;color:#64748b;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
   .rname{font-weight:700;font-size:16px;line-height:1.2;margin-top:1px}
   .rreg{font-size:13px;color:#475569}
   .rmeta{font-size:12px;color:#64748b;margin-top:4px}
   .rround{font-size:12px;color:var(--deep);font-weight:600;margin-top:7px}
 
+  /* Placings / qualifiers / entries all share one row shape. The name and the
+     club are BLOCK boxes: as inline spans they ignored the ellipsis rules and
+     printed on top of the finishing time. */
   ol.places{list-style:none;margin:9px 0 0;padding:0}
   ol.places li{display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid var(--line)}
   ol.places li:first-child{border-top:0}
-  .pos{width:24px;height:24px;border-radius:7px;flex:0 0 auto;display:flex;align-items:center;
-       justify-content:center;font-weight:800;font-size:12px;background:#e2e8f0}
+  .pos{min-width:24px;height:24px;padding:0 5px;border-radius:7px;flex:0 0 auto;display:flex;
+       align-items:center;justify-content:center;font-weight:800;font-size:12px;background:#e2e8f0}
   li.p1 .pos{background:var(--gold)}li.p2 .pos{background:var(--silver)}li.p3 .pos{background:var(--bronze)}
-  .who{min-width:0;flex:1}
-  .boat{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .club{font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .time{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:var(--deep);flex:0 0 auto}
-  .teams{margin:9px 0 0;padding:0;list-style:none;font-size:13px;color:#475569}
-  .teams li{padding:3px 0;border-top:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .teams li:first-child{border-top:0}
+  .who{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}
+  .boat,.club{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .boat{font-weight:600;font-size:14px;line-height:1.25}
+  .club{font-size:12px;color:#64748b;line-height:1.3}
+  .time{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:var(--deep);
+        flex:0 0 auto;white-space:nowrap;align-self:center}
   .note{font-size:12.5px;color:#64748b;margin-top:9px}
+  .more{margin-top:auto;padding-top:10px;font-size:12.5px;font-weight:700;color:var(--deep);
+        display:flex;align-items:center;gap:5px}
+  .more .chev{font-weight:800}
 
   .tally{background:#fff;border:1px solid var(--line);border-radius:14px;margin:0 0 26px;overflow:hidden}
   .tally h2{margin:0;padding:11px 14px;font-size:15px;border-bottom:1px solid var(--line)}
@@ -84,6 +91,42 @@
   footer{padding:16px 0 30px;text-align:center;font-size:12px;color:#64748b}
   @media (prefers-reduced-motion:no-preference){.card{transition:box-shadow .15s}}
   @media (max-width:420px){.grid{grid-template-columns:1fr}}
+
+  /* ── Detail view ──────────────────────────────────────────────────────────
+     A dialog on a desktop, a bottom sheet on a phone. Every race is reachable
+     at #race-<n>, so a result can be shared as a link and Back closes it. */
+  #sheet{border:0;padding:0;background:#fff;color:inherit;width:calc(100% - 24px);max-width:560px;
+         border-radius:16px;box-shadow:0 24px 60px rgba(2,6,23,.35);max-height:86vh;overflow:hidden}
+  #sheet[open]{display:flex;flex-direction:column}
+  #sheet::backdrop{background:rgba(2,6,23,.55)}
+  .sh-head{display:flex;gap:10px;align-items:flex-start;padding:14px 14px 11px;
+           border-bottom:1px solid var(--line)}
+  .sh-head h2{margin:1px 0 0;font-size:18px;line-height:1.2;font-weight:800}
+  .sh-head .x{margin-left:auto;flex:0 0 auto;width:32px;height:32px;border-radius:9px;border:0;
+              background:#f1f5f9;color:#475569;font-size:15px;line-height:1;cursor:pointer}
+  .sh-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;
+            color:#fff;margin-top:8px}
+  .sh-badge.final{background:#16a34a}.sh-badge.round{background:#0369a1}.sh-badge.none{background:#64748b}
+  .sh-body{padding:4px 14px 14px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .sh-body ol.places li{padding:9px 0;align-items:flex-start}
+  .sh-body .boat{font-size:15px}
+  /* There is room here, so the club and lane wrap rather than truncate. */
+  .sh-body .club{white-space:normal;overflow:visible;text-overflow:clip}
+  .sh-body .time{font-size:14px;padding-top:1px}
+  .sh-sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;
+          font-weight:700;margin:14px 0 0}
+  .sh-foot{padding:10px 14px;border-top:1px solid var(--line);display:flex;align-items:center;
+           gap:10px;font-size:12px;color:#64748b}
+  .sh-foot button{margin-left:auto;font:inherit;font-size:12.5px;font-weight:700;padding:7px 12px;
+                  border-radius:9px;border:1px solid #cbd5e1;background:#fff;color:var(--deep);cursor:pointer}
+  #shBack{position:fixed;inset:0;background:rgba(2,6,23,.55);z-index:40}
+  @media (max-width:640px){
+    #sheet{width:100%;max-width:none;max-height:88vh;border-radius:18px 18px 0 0;
+           position:fixed;inset:auto 0 0 0;margin:0}
+  }
+  /* Fallback for browsers without dialog.showModal(). */
+  #sheet.fb[open]{position:fixed;z-index:41;inset:auto 0 0 0;margin:0 auto}
+  @media (min-width:641px){#sheet.fb[open]{inset:50% auto auto 50%;transform:translate(-50%,-50%)}}
 </style>
 </head>
 <body>
@@ -126,6 +169,22 @@
 
 <footer>Powered by <strong>SportsMIS<sup>®</sup></strong> Regatta</footer>
 
+<div id="shBack" hidden></div>
+<dialog id="sheet" aria-labelledby="shTitle">
+  <div class="sh-head">
+    <div style="min-width:0">
+      <div class="rno" id="shNo"></div>
+      <h2 id="shTitle"></h2>
+      <div class="rreg" id="shReg"></div>
+      <div class="rmeta" id="shMeta"></div>
+      <span class="sh-badge" id="shBadge"></span>
+    </div>
+    <button class="x" id="shClose" type="button" aria-label="Close">✕</button>
+  </div>
+  <div class="sh-body" id="shBody"></div>
+  <div class="sh-foot"><span id="shFoot"></span><button id="shShare" type="button" hidden>Copy link</button></div>
+</dialog>
+
 <script>
 (function () {
   'use strict';
@@ -135,9 +194,14 @@
   var MANIFEST = 'manifest.json';
   var POLL_MS  = 20000;   // manifest only; the payload is fetched on change
   var JITTER   = 7000;    // spread clients out so they never poll in lockstep
+  var PREVIEW  = 3;       // rows shown on the card; the rest live in the sheet
 
   var el = function (id) { return document.getElementById(id); };
   var data = null, version = null, failures = 0;
+  var bySl = {};          // race number -> race, for the detail view
+  var sheet = el('sheet'), openSl = null, pushed = false, lastFocus = null;
+  var modal = typeof sheet.showModal === 'function';
+  if (!modal) sheet.classList.add('fb');
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -150,45 +214,60 @@
     el('dot').className = 'dot' + (cls ? ' ' + cls : '');
   }
 
-  function placeList(places) {
-    if (!places || !places.length) return '<p class="note">No placings recorded.</p>';
-    return '<ol class="places">' + places.map(function (p) {
-      return '<li class="p' + p.pos + '"><span class="pos">' + p.pos + '</span>' +
-        '<span class="who"><span class="boat">' + esc(p.boat) + '</span>' +
-        '<span class="club">' + esc(p.club) + '</span></span>' +
-        (p.time ? '<span class="time">' + esc(p.time) + '</span>' : '') + '</li>';
+  // ── Rows ───────────────────────────────────────────────────────────────
+  // Placings, qualifiers and entries are the same three-part row: a badge, a
+  // two-line name block that truncates, and an optional time.
+  function rowHtml(x, detail) {
+    var badge = x.pos ? String(x.pos) : (x.code ? x.code : '•');
+    var under = x.club || '';
+    if (detail && x.lane) under += (under ? ' · ' : '') + 'Lane ' + x.lane;
+    if (detail && x.heat) under += (under ? ' · ' : '') + 'Heat ' + x.heat;
+    return '<li' + (x.pos && x.pos <= 3 ? ' class="p' + x.pos + '"' : '') + '>' +
+      '<span class="pos">' + esc(badge) + '</span>' +
+      '<span class="who"><span class="boat">' + esc(x.boat) + '</span>' +
+      (under ? '<span class="club">' + esc(under) + '</span>' : '') + '</span>' +
+      (x.time ? '<span class="time">' + esc(x.time) + '</span>' : '') + '</li>';
+  }
+
+  function listHtml(rows, limit, detail) {
+    var use = limit ? rows.slice(0, limit) : rows;
+    return '<ol class="places">' + use.map(function (r) {
+      return rowHtml(r, detail);
     }).join('') + '</ol>';
   }
 
-  function qualifiedList(rows) {
-    if (!rows || !rows.length) return '<p class="note">No qualifiers recorded yet.</p>';
-    return '<ol class="places">' + rows.map(function (q) {
-      return '<li><span class="pos">' + (q.pos || '–') + '</span>' +
-        '<span class="who"><span class="boat">' + esc(q.boat) + '</span>' +
-        '<span class="club">' + esc(q.club) + '</span></span>' +
-        (q.time ? '<span class="time">' + esc(q.time) + '</span>' : '') + '</li>';
-    }).join('') + '</ol>';
+  /** The rows a race shows, whichever of the three states it is in. */
+  function rowsOf(r) {
+    return (r.state === 'final' ? r.places : r.state === 'round' ? r.qualified : r.teams) || [];
   }
 
-  function teamList(rows) {
-    if (!rows || !rows.length) return '<p class="note">No boats entered yet.</p>';
-    return '<ul class="teams">' + rows.map(function (t) {
-      return '<li>' + esc(t.boat) + ' <span style="color:#94a3b8">·</span> ' + esc(t.club) + '</li>';
-    }).join('') + '</ul>';
+  function emptyNote(r) {
+    return '<p class="note">' + (
+      r.state === 'final' ? 'No placings recorded.' :
+      r.state === 'round' ? 'No qualifiers recorded yet.' : 'No boats entered yet.') + '</p>';
   }
 
+  function moreLabel(r, hidden) {
+    if (hidden > 0) {
+      return r.state === 'final' ? 'All ' + (rowsOf(r).length) + ' placings'
+           : r.state === 'round' ? 'All ' + (rowsOf(r).length) + ' qualifiers'
+           : 'All ' + (rowsOf(r).length) + ' boats';
+    }
+    return r.state === 'none' ? 'Race details' : 'Full result';
+  }
+
+  // ── Cards ──────────────────────────────────────────────────────────────
   function cardHtml(r) {
-    var img = r.image || (data.event && data.event.image) || '';
-    var body =
-      r.state === 'final' ? placeList(r.places) :
-      r.state === 'round' ? qualifiedList(r.qualified) :
-                            teamList(r.teams);
+    var img  = r.image || (data.event && data.event.image) || '';
+    var rows = rowsOf(r);
+    var body = rows.length ? listHtml(rows, PREVIEW, false) : emptyNote(r);
+    var hay  = ((r.name || '') + ' ' + (r.regional || '') + ' ' + (r.class || '') + ' ' +
+                rows.map(function (x) { return (x.boat || '') + ' ' + (x.club || ''); }).join(' ')
+               ).toLowerCase();
 
-    return '<article class="card" data-state="' + esc(r.state) + '" data-hay="' +
-        esc(((r.name || '') + ' ' + (r.regional || '') + ' ' + (r.class || '') + ' ' +
-             ((r.places || r.qualified || r.teams || []).map(function (x) {
-                return (x.boat || '') + ' ' + (x.club || '');
-             }).join(' '))).toLowerCase()) + '">' +
+    return '<article class="card" tabindex="0" role="button" data-sl="' + esc(r.sl) +
+        '" data-state="' + esc(r.state) + '" data-hay="' + esc(hay) +
+        '" aria-label="Race ' + esc(r.sl) + ' ' + esc(r.name) + ' — ' + esc(r.label) + '">' +
       '<div class="thumb"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' +
         (img ? '' : '<div class="ph">⛵</div>') +
         '<span class="pill ' + esc(r.state) + '">' + esc(r.label) + '</span>' +
@@ -205,9 +284,116 @@
             (r.state === 'round' ? ' — qualified' : '') + '</div>'
           : '') +
         body +
+        '<div class="more">' + esc(moreLabel(r, rows.length - PREVIEW)) +
+          '<span class="chev">›</span></div>' +
       '</div></article>';
   }
 
+  // ── Detail view ────────────────────────────────────────────────────────
+  function fillSheet(r) {
+    var rows = rowsOf(r);
+    el('shNo').textContent    = 'Race ' + r.sl;
+    el('shTitle').textContent = r.name || '';
+    el('shReg').textContent   = r.regional || '';
+    el('shMeta').textContent  = [r.gender, r.class, r.distance, r.when].filter(Boolean).join(' · ');
+    el('shBadge').textContent = r.label || '';
+    el('shBadge').className   = 'sh-badge ' + (r.state || 'none');
+
+    var heading = r.state === 'final' ? (r.round ? r.round + ' — placings' : 'Placings')
+                : r.state === 'round' ? (r.round ? r.round + ' — qualified' : 'Qualified')
+                : 'Boats entered';
+    el('shBody').innerHTML = '<div class="sh-sec">' + esc(heading) + '</div>' +
+      (rows.length ? listHtml(rows, 0, true) : emptyNote(r));
+    el('shFoot').textContent = r.state === 'final' ? 'Result published'
+                             : r.state === 'round' ? 'Later rounds still to row'
+                             : 'No result published yet';
+  }
+
+  function openSheet(sl) {
+    var r = bySl[sl];
+    if (!r) return;
+    fillSheet(r);
+    if (openSl === sl && sheet.hasAttribute('open')) return;
+    openSl = sl;
+    lastFocus = document.querySelector('.card[data-sl="' + sl + '"]');
+    if (modal) { sheet.showModal(); }
+    else { el('shBack').hidden = false; sheet.setAttribute('open', ''); }
+    document.body.classList.add('locked');
+    el('shBody').scrollTop = 0;
+    el('shClose').focus();
+  }
+
+  function closeSheet() {
+    if (openSl === null) return;
+    openSl = null;
+    if (modal) { if (sheet.open) sheet.close(); }
+    else { sheet.removeAttribute('open'); el('shBack').hidden = true; onClosed(); }
+    document.body.classList.remove('locked');
+  }
+
+  /** Keep the address bar honest once the sheet is gone, whoever closed it. */
+  function onClosed() {
+    openSl = null;
+    document.body.classList.remove('locked');
+    if (/^#race-/.test(location.hash)) {
+      if (pushed) { pushed = false; history.back(); }
+      else { history.replaceState(null, '', location.pathname + location.search); }
+    }
+    if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+    lastFocus = null;
+  }
+
+  function onHash() {
+    var m = /^#race-(\d+)$/.exec(location.hash || '');
+    if (m) openSheet(parseInt(m[1], 10)); else closeSheet();
+  }
+
+  el('cards').addEventListener('click', function (ev) {
+    var card = ev.target.closest && ev.target.closest('.card');
+    if (!card) return;
+    pushed = true;
+    location.hash = 'race-' + card.dataset.sl;   // fires hashchange -> opens
+  });
+  el('cards').addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var card = ev.target.closest && ev.target.closest('.card');
+    if (!card) return;
+    ev.preventDefault();
+    pushed = true;
+    location.hash = 'race-' + card.dataset.sl;
+  });
+
+  el('shClose').addEventListener('click', function () { closeSheet(); });
+  el('shBack').addEventListener('click', function () { closeSheet(); });
+  sheet.addEventListener('close', onClosed);
+  sheet.addEventListener('click', function (ev) {
+    // A click on the dialog element itself is a click on the backdrop area.
+    if (ev.target === sheet) closeSheet();
+  });
+  window.addEventListener('hashchange', onHash);
+  // Without showModal() there is no built-in Escape handling, so add it.
+  if (!modal) document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && openSl !== null) closeSheet();
+  });
+
+  if (navigator.share || (navigator.clipboard && navigator.clipboard.writeText)) {
+    var share = el('shShare');
+    share.hidden = false;
+    share.textContent = navigator.share ? 'Share' : 'Copy link';
+    share.addEventListener('click', function () {
+      var url = location.href;
+      var title = (data && data.event ? data.event.name + ' — ' : '') + el('shTitle').textContent;
+      if (navigator.share) { navigator.share({ title: title, url: url }).catch(function () {}); }
+      else {
+        navigator.clipboard.writeText(url).then(function () {
+          share.textContent = 'Link copied';
+          setTimeout(function () { share.textContent = 'Copy link'; }, 1800);
+        }).catch(function () {});
+      }
+    });
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────
   function render() {
     if (!data) return;
     var ev = data.event || {};
@@ -215,6 +401,9 @@
     el('evName').textContent = ev.name || 'Live Results';
     el('evReg').textContent  = ev.regional || '';
     el('evMeta').textContent = [ev.dates, ev.venue].filter(Boolean).join(' · ');
+
+    bySl = {};
+    (data.races || []).forEach(function (r) { bySl[r.sl] = r; });
 
     el('cards').innerHTML = (data.races || []).map(cardHtml).join('') ||
       '<div class="empty">No races have been published yet.</div>';
@@ -228,6 +417,9 @@
     }).join('');
 
     applyFilter();
+    // A sheet left open while a new version lands must show the new result.
+    if (openSl !== null && bySl[openSl]) fillSheet(bySl[openSl]);
+    else if (openSl !== null) closeSheet();
   }
 
   function applyFilter() {
@@ -264,6 +456,7 @@
         data = await pr.json();
         version = m.version;
         render();
+        onHash();   // honour a #race-N the visitor arrived with
       }
       failures = 0;
       setStatus('Updated ' + new Date(m.updated).toLocaleTimeString([], {

@@ -656,6 +656,25 @@ if (extension_loaded('pdo_sqlite')) {
             (bool)preg_match('/name="rg-template" content="(\\d+)"/', $page, $tv)
             && (int)$tv[1] === \Services\ResultSnapshot::TEMPLATE_VERSION);
 
+        // The page wires itself up by element id. A typo there breaks the
+        // detail view silently in the browser, so check the ids exist.
+        preg_match_all('/\bid="([A-Za-z0-9_-]+)"/', $page, $has);
+        preg_match_all("/\\bel\\('([A-Za-z0-9_-]+)'\\)/", $page, $wants);
+        check('every element the page scripts is present',
+            array_values(array_diff(array_unique($wants[1]), $has[1])), []);
+
+        // The boat and the club must be block boxes. As inline spans they
+        // ignored the truncation rules and printed over the finishing time.
+        ok('the boat and club lines are block boxes',
+            (bool)preg_match('/\.boat\s*,\s*\.club\s*\{[^}]*display:block/', $page));
+
+        // A race is addressable, so a result can be shared as a link and the
+        // back button closes the detail view instead of leaving the page.
+        ok('a race can be linked to directly',
+            str_contains($page, "location.hash = 'race-'")
+            && str_contains($page, 'hashchange')
+            && str_contains($page, 'id="sheet"'));
+
         // Cache rules are what keep the origin idle under load.
         $hta = (string)file_get_contents($snapDir . '/.htaccess');
         ok('versioned payloads are cached immutably', str_contains($hta, 'immutable'));
