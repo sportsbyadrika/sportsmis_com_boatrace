@@ -91,6 +91,91 @@ class Team extends Model
         ) > 0;
     }
 
+    /**
+     * Find the team a bulk-upload row refers to, if it is already on file.
+     * A short code identifies a boat outright when one is given; otherwise
+     * club + boat name do, matched case-insensitively so "NBC" and "nbc"
+     * are not imported twice.
+     */
+    public static function matchExisting(int $eventId, string $shortCode, string $club, string $boat): ?array
+    {
+        $shortCode = strtoupper(trim($shortCode));
+        if ($shortCode !== '') {
+            $row = static::row(
+                "SELECT * FROM teams WHERE event_id = ? AND UPPER(short_code) = ?",
+                [$eventId, $shortCode]
+            );
+            if ($row) return $row;
+        }
+        return static::row(
+            "SELECT * FROM teams
+              WHERE event_id = ? AND LOWER(club_name) = ? AND LOWER(boat_name) = ?",
+            [$eventId, mb_strtolower(trim($club)), mb_strtolower(trim($boat))]
+        );
+    }
+
+    /**
+     * Commit a validated bulk upload in one transaction — either the whole
+     * batch lands or none of it does, so a failure halfway through cannot
+     * leave an event holding half its entries.
+     *
+     * $rows carries the canonical fields from Services\TeamImport. $mode is
+     * 'skip' or 'update' for rows that match a team already on file, and
+     * $registrationStatus is the state each team's registration opens in.
+     *
+     * Returns ['created' => n, 'updated' => n, 'skipped' => n].
+     */
+    public static function importRows(int $eventId, array $rows, string $mode, string $registrationStatus): array
+    {
+        $mode   = $mode === 'update' ? 'update' : 'skip';
+        $status = in_array($registrationStatus, ['draft', 'submitted', 'approved'], true)
+            ? $registrationStatus : 'draft';
+
+        return static::transaction(function () use ($eventId, $rows, $mode, $status) {
+            $tally = ['created' => 0, 'updated' => 0, 'skipped' => 0];
+
+            foreach ($rows as $row) {
+                $data = $row['data'] ?? [];
+                if (($data['club_name'] ?? '') === '' || ($data['boat_name'] ?? '') === '') continue;
+
+                $fields = [
+                    'club_name'     => $data['club_name'],
+                    'boat_name'     => $data['boat_name'],
+                    'captain_name'  => $data['captain_name'],
+                    'boat_class'    => $data['boat_class']    !== '' ? $data['boat_class']    : null,
+                    'home_place'    => $data['home_place']    !== '' ? $data['home_place']    : null,
+                    'short_code'    => $data['short_code']    !== '' ? $data['short_code']    : null,
+                    'contact_name'  => $data['contact_name']  !== '' ? $data['contact_name']  : null,
+                    'contact_phone' => $data['contact_phone'] !== '' ? $data['contact_phone'] : null,
+                    'contact_email' => $data['contact_email'] !== '' ? $data['contact_email'] : null,
+                    'status'        => $data['status'] === 'inactive' ? 'inactive' : 'active',
+                ];
+
+                $existing = static::matchExisting(
+                    $eventId, (string)$data['short_code'], $data['club_name'], $data['boat_name']
+                );
+
+                if ($existing) {
+                    if ($mode === 'skip') { $tally['skipped']++; continue; }
+                    // The logo is never touched: a spreadsheet cannot carry
+                    // one, so re-importing must not wipe an uploaded image.
+                    static::update('teams', $fields, ['id' => (int)$existing['id']]);
+                    $teamId = (int)$existing['id'];
+                    $tally['updated']++;
+                } else {
+                    $fields['event_id'] = $eventId;
+                    $teamId = static::insert('teams', $fields);
+                    $tally['created']++;
+                }
+
+                TeamRegistration::ensureFor($eventId, $teamId, $status);
+                TeamRegistration::applyImportedStatus($eventId, $teamId, $status);
+            }
+
+            return $tally;
+        });
+    }
+
     /** "Boat Name (Club)" — the label used on lane cards and result rows. */
     public static function label(array $team): string
     {

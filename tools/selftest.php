@@ -20,6 +20,7 @@ spl_autoload_register(function (string $class) {
         'Core\\'        => APP_ROOT . '/core/',
         'Models\\'      => APP_ROOT . '/models/',
         'Controllers\\' => APP_ROOT . '/controllers/',
+        'Services\\'    => APP_ROOT . '/services/',
     ] as $prefix => $base) {
         if (!str_starts_with($class, $prefix)) continue;
         $file = $base . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
@@ -149,6 +150,212 @@ if (is_file($envSample)) {
         ok('chroma default parses as a colour',
             (bool)preg_match('/^#[0-9a-fA-F]{6}$/', $parsed['DISPLAY_CHROMA_COLOR']));
     }
+}
+
+// ── Bulk team upload: CSV parsing ───────────────────────────────────────────
+// Services\TeamImport turns a spreadsheet into validated rows. Everything a
+// real organiser's export throws at it — locale delimiters, Excel's BOM,
+// loose headings, blank lines, duplicates — is handled here rather than at
+// the database, so it is worth exercising directly.
+$imp = \Services\TeamImport::class;
+
+$csv = "Club Name,Boat Name,Captain Name,Boat Class,Home Place,Short Code,Contact Name,Contact Phone,Contact Email,Status\n"
+     . "Nadubhagom BC,Nadubhagom Chundan,K. Menon,Chundan,Nadubhagom,NBC,R. Kumar,9876543210,nbc@example.com,active\n"
+     . "Karichal BC,Karichal Chundan,S. Pillai,Chundan,Karichal,KBC,,,,\n";
+$r = $imp::parse($csv);
+check('clean file has no fatal error', $r['fatal'], '');
+check('clean file is missing nothing', $r['missing'], []);
+check('clean file yields both rows', count($r['rows']), 2);
+check('no row errors on a clean file',
+    array_merge(...array_column($r['rows'], 'errors')) ?: [], []);
+check('first row keeps its boat name', $r['rows'][0]['data']['boat_name'], 'Nadubhagom Chundan');
+check('short code is upper-cased', $r['rows'][0]['data']['short_code'], 'NBC');
+check('blank status defaults to active', $r['rows'][1]['data']['status'], 'active');
+check('line numbers point at the spreadsheet row', $r['rows'][1]['line'], 3);
+
+// The template we hand people must itself import without complaint.
+$t = $imp::parse($imp::templateCsv());
+check('template parses with no fatal error', $t['fatal'], '');
+check('template has every required column', $t['missing'], []);
+check('template rows are all valid',
+    array_merge(...array_column($t['rows'], 'errors')) ?: [], []);
+
+// Loose headings — people rename columns.
+$r = $imp::parse("Club,Boat,Captain,Code,Email,Phone\nA Club,A Boat,A Captain,ABC,a@b.com,9876543210\n");
+check('loose headings are accepted', $r['missing'], []);
+check('aliased code column maps through', $r['rows'][0]['data']['short_code'], 'ABC');
+check('aliased email column maps through', $r['rows'][0]['data']['contact_email'], 'a@b.com');
+
+// A missing required column must be reported, not silently imported.
+$r = $imp::parse("Club Name,Boat Name\nA,B\n");
+check('missing required column is reported', $r['missing'], ['Captain Name']);
+check('nothing is parsed when a column is missing', $r['rows'], []);
+
+// Locale delimiters and Excel's BOM.
+$r = $imp::parse("Club Name;Boat Name;Captain Name\nA Club;A Boat;A Captain\n");
+check('semicolon-delimited file parses', count($r['rows']), 1);
+$r = $imp::parse("Club Name\tBoat Name\tCaptain Name\nA Club\tA Boat\tA Captain\n");
+check('tab-delimited file parses', count($r['rows']), 1);
+$r = $imp::parse("\xEF\xBB\xBFClub Name,Boat Name,Captain Name\nA Club,A Boat,A Captain\n");
+check('BOM does not break the first heading', $r['missing'], []);
+check('BOM does not leak into the first value', $r['rows'][0]['data']['club_name'], 'A Club');
+
+// Blank lines in the middle of a sheet are common and must be ignored.
+$r = $imp::parse("Club Name,Boat Name,Captain Name\nA,B,C\n\n,,\nD,E,F\n");
+check('blank lines are skipped', count($r['rows']), 2);
+
+// Quoted commas — a club with a comma in its name.
+$r = $imp::parse("Club Name,Boat Name,Captain Name\n\"Alpha, Beta Club\",A Boat,A Captain\n");
+check('quoted comma stays inside the field', $r['rows'][0]['data']['club_name'], 'Alpha, Beta Club');
+
+// Duplicates inside one file, by short code and by club+boat.
+$r = $imp::parse("Club Name,Boat Name,Captain Name,Short Code\nA,B,C,XX\nD,E,F,XX\n");
+check('duplicate short code is flagged', count($r['rows'][1]['errors']), 1);
+ok('duplicate names the earlier row', str_contains($r['rows'][1]['errors'][0], 'row 2'));
+$r = $imp::parse("Club Name,Boat Name,Captain Name\nA Club,A Boat,C\na club,a boat,D\n");
+check('duplicate club+boat is flagged case-insensitively', count($r['rows'][1]['errors']), 1);
+check('the first of a duplicate pair stays clean', $r['rows'][0]['errors'], []);
+
+// Field-level validation.
+$r = $imp::parse("Club Name,Boat Name,Captain Name,Contact Email\nA,B,C,not-an-email\n");
+ok('invalid email is rejected', str_contains(implode(' ', $r['rows'][0]['errors']), 'Contact Email'));
+$r = $imp::parse("Club Name,Boat Name,Captain Name,Contact Phone\nA,B,C,=CMD|calc\n");
+ok('junk in the phone column is rejected', str_contains(implode(' ', $r['rows'][0]['errors']), 'Contact Phone'));
+$r = $imp::parse("Club Name,Boat Name,Captain Name,Status\nA,B,C,retired\n");
+ok('unknown status is rejected', str_contains(implode(' ', $r['rows'][0]['errors']), 'Status'));
+check('rejected status still falls back to active', $r['rows'][0]['data']['status'], 'active');
+$r = $imp::parse("Club Name,Boat Name,Captain Name\n,B,C\n");
+ok('missing required value is rejected', str_contains(implode(' ', $r['rows'][0]['errors']), 'Club Name'));
+
+// Over-length values are reported AND truncated to the column width.
+$long = str_repeat('x', 260);
+$r = $imp::parse("Club Name,Boat Name,Captain Name\n{$long},B,C\n");
+ok('over-length value is reported', str_contains(implode(' ', $r['rows'][0]['errors']), 'longer than'));
+check('over-length value is cut to the column width',
+    mb_strlen($r['rows'][0]['data']['club_name']), 200);
+
+// Empty and header-only files.
+check('empty file is a fatal error', $imp::parse("")['fatal'] !== '', true);
+$r = $imp::parse("Club Name,Boat Name,Captain Name\n");
+check('header-only file yields no rows', $r['rows'], []);
+check('header-only file is not fatal', $r['fatal'], '');
+
+// The row cap bounds the preview page and the session holding it.
+$big = "Club Name,Boat Name,Captain Name\n";
+for ($i = 0; $i < $imp::MAX_ROWS + 25; $i++) $big .= "Club {$i},Boat {$i},Cap {$i}\n";
+$r = $imp::parse($big);
+check('row cap is enforced', count($r['rows']), $imp::MAX_ROWS);
+check('exceeding the cap is reported', $r['truncated'], true);
+
+// ── Bulk team upload: the write path ────────────────────────────────────────
+// Team::importRows() decides what a previewed spreadsheet actually does to
+// the event. Driven against SQLite with a PDO injected into Core\Model, so
+// create / update / skip and the forward-only registration rule are exercised
+// for real. Portable SQL only — this tests the logic, not MySQL.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE teams (id INTEGER PRIMARY KEY, event_id INT, club_name TEXT,
+        boat_name TEXT, captain_name TEXT, boat_class TEXT, home_place TEXT, contact_name TEXT,
+        contact_phone TEXT, contact_email TEXT, logo TEXT, short_code TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE team_registrations (id INTEGER PRIMARY KEY, event_id INT, team_id INT,
+        status TEXT, remarks TEXT, submitted_at TEXT, decided_at TEXT, decided_by TEXT)');
+
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $EV = 7;
+    $rowsOf = fn(string $csv) => \Services\TeamImport::parse($csv)['rows'];
+    $countTeams = fn() => (int)$pdo->query("SELECT COUNT(*) FROM teams")->fetchColumn();
+    $teamBy = function (string $code) use ($pdo) {
+        $st = $pdo->prepare("SELECT * FROM teams WHERE short_code = ?");
+        $st->execute([$code]);
+        return $st->fetch() ?: [];
+    };
+    $regOf = function (int $teamId) use ($pdo) {
+        $st = $pdo->prepare("SELECT * FROM team_registrations WHERE team_id = ?");
+        $st->execute([$teamId]);
+        return $st->fetch() ?: [];
+    };
+
+    $sheet = "Club Name,Boat Name,Captain Name,Short Code\n"
+           . "Nadubhagom BC,Nadubhagom Chundan,K. Menon,NBC\n"
+           . "Karichal BC,Karichal Chundan,S. Pillai,KBC\n";
+
+    $t = \Models\Team::importRows($EV, $rowsOf($sheet), 'skip', 'draft');
+    check('import creates both boats', $t, ['created' => 2, 'updated' => 0, 'skipped' => 0]);
+    check('both boats are on file', $countTeams(), 2);
+    check('each import opens a registration',
+        (int)$pdo->query("SELECT COUNT(*) FROM team_registrations")->fetchColumn(), 2);
+    check('registration opens as draft', $regOf((int)$teamBy('NBC')['id'])['status'], 'draft');
+
+    // A logo can only ever be added by hand; re-importing must not wipe it.
+    $pdo->exec("UPDATE teams SET logo = '/assets/uploads/teams/nbc.png' WHERE short_code = 'NBC'");
+
+    // Re-uploading the same sheet in skip mode changes nothing.
+    $t = \Models\Team::importRows($EV, $rowsOf($sheet), 'skip', 'draft');
+    check('re-upload in skip mode skips both', $t, ['created' => 0, 'updated' => 0, 'skipped' => 2]);
+    check('re-upload in skip mode adds nothing', $countTeams(), 2);
+
+    // Update mode rewrites the details of a matching boat.
+    $fixed = "Club Name,Boat Name,Captain Name,Short Code,Home Place\n"
+           . "Nadubhagom BC,Nadubhagom Chundan,P. Varghese,NBC,Nadubhagom\n";
+    $t = \Models\Team::importRows($EV, $rowsOf($fixed), 'update', 'draft');
+    check('update mode updates the match', $t, ['created' => 0, 'updated' => 1, 'skipped' => 0]);
+    check('the captain is rewritten', $teamBy('NBC')['captain_name'], 'P. Varghese');
+    check('a blank column is filled in', $teamBy('NBC')['home_place'], 'Nadubhagom');
+    check('the uploaded logo survives an update',
+        $teamBy('NBC')['logo'], '/assets/uploads/teams/nbc.png');
+
+    // A boat matches on club + boat name even without a short code.
+    $noCode = "Club Name,Boat Name,Captain Name\nKarichal BC,Karichal Chundan,New Captain\n";
+    $t = \Models\Team::importRows($EV, $rowsOf($noCode), 'update', 'draft');
+    check('match falls back to club + boat name', $t['updated'], 1);
+    check('no duplicate was created', $countTeams(), 2);
+
+    // Importing as approved moves the registration forward.
+    $t = \Models\Team::importRows($EV, $rowsOf($sheet), 'update', 'approved');
+    $reg = $regOf((int)$teamBy('NBC')['id']);
+    check('importing as approved approves the registration', $reg['status'], 'approved');
+    ok('approval is stamped', !empty($reg['decided_at']) && !empty($reg['decided_by']));
+
+    // ...and no later import may walk an already-vetted boat backwards.
+    // Two separate guards cover this, so both need their own case:
+    //   'draft'     returns before the rank check ever runs;
+    //   'submitted' is what the rank check itself exists to stop.
+    \Models\Team::importRows($EV, $rowsOf($sheet), 'update', 'draft');
+    check('a later draft import cannot un-approve',
+        $regOf((int)$teamBy('NBC')['id'])['status'], 'approved');
+    \Models\Team::importRows($EV, $rowsOf($sheet), 'update', 'submitted');
+    check('a later submitted import cannot demote an approved boat',
+        $regOf((int)$teamBy('NBC')['id'])['status'], 'approved');
+
+    // The guard must not block legitimate progress: a fresh boat walks
+    // draft -> submitted -> approved across successive uploads.
+    $third = "Club Name,Boat Name,Captain Name,Short Code\nVeeyapuram BC,Veeyapuram Chundan,R. Nair,VBC\n";
+    \Models\Team::importRows($EV, $rowsOf($third), 'skip', 'draft');
+    $vbc = (int)$teamBy('VBC')['id'];
+    check('a new boat starts as draft', $regOf($vbc)['status'], 'draft');
+    \Models\Team::importRows($EV, $rowsOf($third), 'update', 'submitted');
+    check('draft moves forward to submitted', $regOf($vbc)['status'], 'submitted');
+    ok('submission is stamped', !empty($regOf($vbc)['submitted_at']));
+    \Models\Team::importRows($EV, $rowsOf($third), 'update', 'approved');
+    check('submitted moves forward to approved', $regOf($vbc)['status'], 'approved');
+
+    // Matching is case-insensitive on both routes.
+    ok('short-code match ignores case',
+        \Models\Team::matchExisting($EV, 'nbc', 'x', 'y') !== null);
+    ok('name match ignores case',
+        \Models\Team::matchExisting($EV, '', 'karichal bc', 'KARICHAL CHUNDAN') !== null);
+    ok('an unrelated boat does not match',
+        \Models\Team::matchExisting($EV, '', 'Other Club', 'Other Boat') === null);
+    ok('another event\'s boats are never matched',
+        \Models\Team::matchExisting($EV + 1, 'NBC', 'Nadubhagom BC', 'Nadubhagom Chundan') === null);
+
+    $prop->setValue(null, null);
 }
 
 // ── Sign-in resolution ──────────────────────────────────────────────────────

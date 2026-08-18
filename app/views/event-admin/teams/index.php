@@ -5,7 +5,12 @@
     <h4 class="fw-bold mb-1">Teams</h4>
     <p class="text-muted mb-0 small">Clubs, boats and captains entered in this regatta.</p>
   </div>
-  <a href="/event-admin/teams/create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Team</a>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/event-admin/teams/import" class="btn btn-outline-primary">
+      <i class="bi bi-file-earmark-arrow-up me-1"></i>Bulk Upload
+    </a>
+    <a href="/event-admin/teams/create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Team</a>
+  </div>
 </div>
 
 <form class="sms-card p-3 mb-3" method="GET" action="/event-admin/teams">
@@ -35,8 +40,13 @@
   <div class="sms-empty-state">
     <i class="bi bi-people"></i>
     <h5>No teams yet</h5>
-    <p>Add the clubs and boats taking part in this regatta.</p>
-    <a href="/event-admin/teams/create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Team</a>
+    <p>Add the clubs and boats taking part in this regatta — one at a time, or many at once from a spreadsheet.</p>
+    <div class="d-flex gap-2 justify-content-center flex-wrap">
+      <a href="/event-admin/teams/create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Team</a>
+      <a href="/event-admin/teams/import" class="btn btn-outline-primary">
+        <i class="bi bi-file-earmark-arrow-up me-1"></i>Bulk Upload
+      </a>
+    </div>
   </div>
 <?php else: ?>
   <div class="sms-card">
