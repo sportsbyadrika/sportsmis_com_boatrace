@@ -3,6 +3,7 @@ namespace Controllers;
 
 use Core\FileUpload;
 use Models\{Team, TeamRegistration};
+use Services\TeamImport;
 
 /**
  * Event Admin -> Teams and their registrations.
@@ -133,6 +134,178 @@ class EventAdminTeamController extends EventAdminBase
 
         Team::deleteById((int)$team['id']);
         $this->redirect('/event-admin/teams', 'Team removed.');
+    }
+
+    // ── Bulk upload ──────────────────────────────────────────────────────────
+    // Two steps on purpose: a spreadsheet is never written straight to the
+    // database. The upload is parsed and shown back row by row, and only the
+    // confirm step writes — in one transaction.
+
+    /** How long a parsed-but-unconfirmed upload stays available. */
+    private const IMPORT_TTL = 900;   // 15 minutes
+
+    public function importForm(): void
+    {
+        $this->boot();
+        $this->view('event-admin/teams/import', [
+            'pageTitle' => 'Bulk Upload Teams',
+            'columns'   => TeamImport::COLUMNS,
+            'maxRows'   => TeamImport::MAX_ROWS,
+        ]);
+    }
+
+    /** The starter spreadsheet, so nobody has to guess the column names. */
+    public function importTemplate(): void
+    {
+        $this->boot();
+
+        $csv = TeamImport::templateCsv();
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="regatta-teams-template.csv"');
+        header('Content-Length: ' . strlen($csv));
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        echo $csv;
+        exit;
+    }
+
+    /** Parse, validate against what is already on file, and show the result. */
+    public function importPreview(): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+
+        $mode   = ($_POST['mode'] ?? 'skip') === 'update' ? 'update' : 'skip';
+        $status = (string)($_POST['registration_status'] ?? 'draft');
+        if (!in_array($status, ['draft', 'submitted', 'approved'], true)) $status = 'draft';
+
+        $content = $this->readUploadedCsv();          // redirects on any problem
+        $parsed  = TeamImport::parse($content);
+
+        if ($parsed['fatal'] !== '') {
+            $this->redirect('/event-admin/teams/import', $parsed['fatal'], 'error');
+        }
+        if ($parsed['missing']) {
+            $this->redirect('/event-admin/teams/import',
+                'The file is missing these required columns: ' . implode(', ', $parsed['missing']) . '.', 'error');
+        }
+        if (!$parsed['rows']) {
+            $this->redirect('/event-admin/teams/import', 'That file has a header but no data rows.', 'error');
+        }
+
+        // Decide what each row would do, against the teams already on file.
+        $ready = [];
+        foreach ($parsed['rows'] as $row) {
+            $data = $row['data'];
+            $existing = $row['errors'] ? null : Team::matchExisting(
+                $this->eventId(), (string)$data['short_code'], $data['club_name'], $data['boat_name']
+            );
+
+            if ($row['errors'])          $row['action'] = 'error';
+            elseif (!$existing)          $row['action'] = 'create';
+            elseif ($mode === 'update')  $row['action'] = 'update';
+            else                         $row['action'] = 'skip';
+
+            $row['existing'] = $existing ? Team::label($existing) : '';
+            $ready[] = $row;
+        }
+
+        $_SESSION['team_import'] = [
+            'at'     => time(),
+            'mode'   => $mode,
+            'status' => $status,
+            'rows'   => $ready,
+        ];
+
+        $this->view('event-admin/teams/import-preview', [
+            'pageTitle' => 'Bulk Upload — Preview',
+            'rows'      => $ready,
+            'mode'      => $mode,
+            'status'    => $status,
+            'truncated' => $parsed['truncated'],
+            'maxRows'   => TeamImport::MAX_ROWS,
+            'counts'    => $this->tally($ready),
+        ]);
+    }
+
+    /** Write the previewed rows. Rows that failed validation are never written. */
+    public function importCommit(): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+
+        $pending = $_SESSION['team_import'] ?? null;
+        if (!is_array($pending) || time() - (int)($pending['at'] ?? 0) > self::IMPORT_TTL) {
+            unset($_SESSION['team_import']);
+            $this->redirect('/event-admin/teams/import',
+                'That upload has expired. Please choose the file again.', 'warning');
+        }
+
+        $writable = array_values(array_filter(
+            $pending['rows'] ?? [],
+            fn($r) => ($r['action'] ?? '') === 'create' || ($r['action'] ?? '') === 'update'
+        ));
+        unset($_SESSION['team_import']);
+
+        if (!$writable) {
+            $this->redirect('/event-admin/teams/import', 'Nothing in that file could be imported.', 'error');
+        }
+
+        $tally = Team::importRows(
+            $this->eventId(), $writable,
+            (string)$pending['mode'], (string)$pending['status']
+        );
+
+        $parts = [];
+        if ($tally['created']) $parts[] = $tally['created'] . ' added';
+        if ($tally['updated']) $parts[] = $tally['updated'] . ' updated';
+        if ($tally['skipped']) $parts[] = $tally['skipped'] . ' skipped';
+
+        $this->redirect('/event-admin/teams',
+            'Bulk upload complete — ' . ($parts ? implode(', ', $parts) : 'nothing to do') . '.');
+    }
+
+    /** Read the uploaded CSV, or redirect back with a plain explanation. */
+    private function readUploadedCsv(): string
+    {
+        $back = '/event-admin/teams/import';
+        $file = $_FILES['file'] ?? null;
+
+        if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $this->redirect($back, 'Choose a CSV file to upload.', 'error');
+        }
+        if (($file['error'] ?? 0) !== UPLOAD_ERR_OK) {
+            $this->redirect($back, 'That upload did not complete. Please try again.', 'error');
+        }
+        if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+            $this->redirect($back, 'That upload could not be read. Please try again.', 'error');
+        }
+        if ((int)$file['size'] > 2 * 1024 * 1024) {
+            $this->redirect($back, 'That file is larger than 2 MB. Split it and upload in batches.', 'error');
+        }
+
+        $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'txt'], true)) {
+            $this->redirect($back,
+                'Upload a .csv file. In Excel or Google Sheets choose File → Save as / Download → CSV.', 'error');
+        }
+
+        $content = @file_get_contents($file['tmp_name']);
+        if ($content === false || trim($content) === '') {
+            $this->redirect($back, 'That file is empty.', 'error');
+        }
+        return $content;
+    }
+
+    /** Row counts per action, for the preview summary. */
+    private function tally(array $rows): array
+    {
+        $counts = ['create' => 0, 'update' => 0, 'skip' => 0, 'error' => 0];
+        foreach ($rows as $r) {
+            $action = $r['action'] ?? 'error';
+            if (isset($counts[$action])) $counts[$action]++;
+        }
+        return $counts;
     }
 
     // ── Registrations ────────────────────────────────────────────────────────

@@ -90,6 +90,27 @@ The alternative was one `team_registrations` table with a nullable
 don't collide) and which reads worse. If you'd rather the two were merged,
 it's a contained change.
 
+### Bulk team upload
+
+`Services\TeamImport` parses a CSV into validated rows; `Team::importRows()`
+commits them in one transaction. Two decisions worth knowing:
+
+- **Two steps, always.** The upload is parsed and shown back row by row before
+  anything is written. Rows that fail validation are displayed but never
+  imported, so a bad spreadsheet cannot half-land.
+- **Registrations only move forward.** The upload form chooses the state
+  imported teams open in (draft / submitted / approved), and
+  `TeamRegistration::applyImportedStatus()` refuses to walk a registration
+  backwards. Re-uploading a corrected sheet can never un-approve a boat that
+  has already been vetted — and possibly already drawn into a lane. Note this
+  is guarded twice: `draft` returns before the rank check, and the rank check
+  itself stops `submitted` demoting an `approved` row.
+- **Logos are never touched.** A spreadsheet cannot carry an image, so an
+  update writes every column except `logo`.
+
+Matching an uploaded row to a team already on file uses the short code when
+one is given, and club + boat name otherwise, both case-insensitively.
+
 ### Rounds own the lane count ⚠
 
 `lane_count` lives on `rounds`, not on the event or the race, because a final

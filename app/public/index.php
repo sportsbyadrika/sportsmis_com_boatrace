@@ -134,6 +134,10 @@ $router->post('/event-admin/details/{panel}/save',            'EventAdminControl
 $router->post('/event-admin/details/image',                   'EventAdminController@saveImage');
 
 $router->get ('/event-admin/teams',                           'EventAdminTeamController@index');
+$router->get ('/event-admin/teams/import',                    'EventAdminTeamController@importForm');
+$router->get ('/event-admin/teams/import/template',           'EventAdminTeamController@importTemplate');
+$router->post('/event-admin/teams/import/preview',            'EventAdminTeamController@importPreview');
+$router->post('/event-admin/teams/import',                    'EventAdminTeamController@importCommit');
 $router->get ('/event-admin/teams/create',                    'EventAdminTeamController@createForm');
 $router->post('/event-admin/teams',                           'EventAdminTeamController@store');
 $router->get ('/event-admin/teams/{hash}/edit',               'EventAdminTeamController@editForm');

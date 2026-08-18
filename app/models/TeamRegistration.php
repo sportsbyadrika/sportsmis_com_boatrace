@@ -83,6 +83,35 @@ class TeamRegistration extends Model
         ]);
     }
 
+    /**
+     * Move an imported team's registration to the state the operator chose on
+     * the upload form.
+     *
+     * Only ever moves FORWARD along draft → submitted → approved. Re-importing
+     * a spreadsheet must never quietly un-approve a boat that has already been
+     * vetted — and possibly already drawn into a lane.
+     */
+    public static function applyImportedStatus(int $eventId, int $teamId, string $status,
+                                               string $by = 'Bulk upload'): void
+    {
+        $rank = ['returned' => 0, 'draft' => 0, 'submitted' => 1, 'approved' => 2];
+        if (!isset($rank[$status]) || $status === 'draft') return;
+
+        $current = static::findByTeam($eventId, $teamId);
+        if (!$current) return;
+        if (($rank[$current['status']] ?? 0) >= $rank[$status]) return;
+
+        $now  = date('Y-m-d H:i:s');
+        $data = ['status' => $status, 'remarks' => null];
+
+        if (empty($current['submitted_at'])) $data['submitted_at'] = $now;
+        if ($status === 'approved') {
+            $data['decided_at'] = $now;
+            $data['decided_by'] = $by;
+        }
+        static::updateById((int)$current['id'], $data);
+    }
+
     public static function updateById(int $id, array $data): int
     {
         return static::update('team_registrations', $data, ['id' => $id]);
