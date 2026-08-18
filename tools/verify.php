@@ -17,7 +17,7 @@ define('CONFIG_ROOT', APP_ROOT . '/config');
 define('PUBLIC_ROOT', APP_ROOT . '/public');
 
 $errors = [];
-$checked = ['lint' => 0, 'routes' => 0, 'views' => 0, 'js' => 0];
+$checked = ['lint' => 0, 'routes' => 0, 'views' => 0, 'js' => 0, 'calls' => 0];
 
 // ── 1. Lint ─────────────────────────────────────────────────────────────────
 $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root . '/app'));
@@ -92,6 +92,39 @@ foreach (glob(APP_ROOT . '/controllers/*.php') as $file) {
     }
 }
 
+// ── 5. Static model/class calls resolve to a real method or constant ────────
+// Controllers and views reach models by static call. A renamed method shows
+// up only when that page is opened, so resolve every reference up front.
+$modelNames = [];
+foreach (glob(APP_ROOT . '/models/*.php') as $file) {
+    $modelNames[basename($file, '.php')] = $file;
+}
+$members = [];   // class => [method|CONST => true]
+foreach ($modelNames as $class => $file) {
+    $src = file_get_contents($file);
+    preg_match_all('/(?:public\s+)?(?:static\s+)?function\s+(\w+)\s*\(/', $src, $fn);
+    preg_match_all('/const\s+(\w+)/', $src, $co);
+    $members[$class] = array_fill_keys(array_merge($fn[1], $co[1]), true);
+}
+
+$scanDirs = [APP_ROOT . '/controllers', APP_ROOT . '/views'];
+foreach ($scanDirs as $dir) {
+    $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir));
+    foreach ($rii as $file) {
+        if ($file->isDir() || $file->getExtension() !== 'php') continue;
+        $src  = file_get_contents($file->getPathname());
+        $rel  = str_replace(APP_ROOT, 'app', $file->getPathname());
+        preg_match_all('/\\b([A-Z]\\w+)::(\\w+)/', $src, $calls, PREG_SET_ORDER);
+        foreach ($calls as [$whole, $class, $member]) {
+            if (!isset($members[$class])) continue;          // not one of our models
+            $checked['calls']++;
+            if (!isset($members[$class][$member])) {
+                $errors[] = "CALL  {$rel}: {$class}::{$member} does not exist";
+            }
+        }
+    }
+}
+
 // ── 5. Inline <script> blocks in views (skipped when node isn't available) ──
 exec('node --version 2>/dev/null', $nodeOut, $nodeCode);
 if ($nodeCode === 0) {
@@ -102,8 +135,12 @@ if ($nodeCode === 0) {
         if (!preg_match_all('#<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>#s', $src, $blocks)) continue;
         foreach ($blocks[1] as $i => $js) {
             if (trim($js) === '') continue;
-            // A block that interpolates PHP isn't standalone JavaScript.
-            if (str_contains($js, '<?')) continue;
+            // A block with PHP control flow isn't standalone JavaScript, but
+            // one that only interpolates values is — stub each short-echo tag
+            // with a literal so the surrounding syntax can still be checked.
+            // (A close tag must not appear in this comment; it would end PHP.)
+            if (str_contains($js, '<?php')) continue;
+            $js = preg_replace('/<\?=.*?\?>/s', '0', $js);
             $checked['js']++;
             $tmp = sys_get_temp_dir() . '/verify-' . getmypid() . "-{$i}.js";
             file_put_contents($tmp, $js);
@@ -119,8 +156,8 @@ if ($nodeCode === 0) {
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────
-printf("Linted %d files · checked %d routes · %d view targets · %d inline script blocks\n",
-    $checked['lint'], $checked['routes'], $checked['views'], $checked['js']);
+printf("Linted %d files · %d routes · %d view targets · %d model calls · %d script blocks\n",
+    $checked['lint'], $checked['routes'], $checked['views'], $checked['calls'], $checked['js']);
 
 if ($errors) {
     echo "\n" . count($errors) . " problem(s):\n";

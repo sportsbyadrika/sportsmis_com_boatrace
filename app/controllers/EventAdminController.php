@@ -1,7 +1,7 @@
 <?php
 namespace Controllers;
 
-use Core\{Auth, FileUpload};
+use Core\FileUpload;
 use Models\{Event, EventUser, TeamRegistration, EventRace};
 
 /**

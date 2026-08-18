@@ -1,0 +1,186 @@
+# Architecture & data model
+
+Notes on how SportsMIS Regatta is put together, and on the places where the
+boat-race domain diverged from the generic SportsMIS one. **The decisions
+marked ⚠ are the ones worth a second opinion** — they were made to keep the
+build moving and are cheap to change.
+
+---
+
+## 1. Tenancy
+
+`events` is the tenant boundary. Every team, race, round, heat, lane and
+result carries an `event_id`, and every per-event controller resolves its
+event in `boot()` and scopes each query to it. Nothing is global except the
+`users` table (platform accounts) and `app_settings`.
+
+The **Event Code** (`events.code`, e.g. `RG1A2B3C`) is the tenant's public
+handle. It is minted on first use by `ensureEventCode()`, never changes, and
+is what event admins, event users and display operators all type.
+
+## 2. The three session buckets
+
+`Core\Auth` keeps three independent buckets in one PHP session:
+
+| Bucket | Table | Sign-in |
+|---|---|---|
+| `$_SESSION['user']` | `users` | email + password |
+| `$_SESSION['event_admin']` | `event_admins` | Event Code + email + password |
+| `$_SESSION['event_user']` | `event_users` | Event Code + email + password |
+
+This mirrors SportsMIS's `event_staff` bucket, and it means a platform owner
+debugging an event portal doesn't lose their admin session. Per-event
+credentials never touch `users`; uniqueness is per `(event_id, email)`, so one
+person can hold accounts on several regattas with one address.
+
+`EventUserBase::boot()` re-reads the account's privileges from the database on
+every request rather than trusting the session copy, so a grant or revoke by
+the event admin takes effect immediately instead of on next sign-in.
+
+## 3. Entity model
+
+```
+events
+├── event_admins
+├── event_users ── event_user_privileges
+├── teams ─────── team_registrations ──┐
+└── event_races ── race_entries ───────┘
+        └── rounds
+             └── heats
+                  └── lane_allocations ── results
+```
+
+### teams vs team_registrations ⚠
+
+The spec described `teams` as belonging to an event *and* `team_registrations`
+as linking a team to an event, which is circular. Resolved as:
+
+- **`teams`** — the event's club/boat master. Event-scoped, so the same club
+  entering two regattas has one row per event and a boat can be renamed or
+  re-crewed between years without rewriting history.
+- **`team_registrations`** — that boat's entry into the event, carrying the
+  `draft → submitted → approved / returned` workflow. One row per
+  `(event_id, team_id)`.
+- **`race_entries`** — the "and later to specific event races" half, split
+  into its own table: which registered boats contest which programme item.
+
+The alternative was one `team_registrations` table with a nullable
+`event_race_id` doing both jobs, which MySQL can't uniquely constrain (NULLs
+don't collide) and which reads worse. If you'd rather the two were merged,
+it's a contained change.
+
+### Rounds own the lane count ⚠
+
+`lane_count` lives on `rounds`, not on the event or the race, because a final
+frequently runs fewer lanes than the heats that fed it. `events.default_lanes`
+and `event_races.lane_count` are only starting values for a new round.
+
+Narrowing a round's lane count is **refused** while a boat still occupies a
+lane above the new limit, rather than silently stranding it
+(`LaneAllocation::maxLaneUsed()`).
+
+### The two unique keys that hold the lane board together
+
+```sql
+UNIQUE KEY uq_lane       (heat_id, lane_no)                 -- one boat per lane
+UNIQUE KEY uq_round_team (round_id, team_registration_id)   -- one lane per boat per round
+```
+
+Both are enforced in MySQL, not just in PHP, so a double-tap on the drag
+handler or two operators working the same round cannot produce a duplicate.
+
+`LaneAllocation::moveOrSwap()` performs a move-or-swap in a single
+transaction, parking the source row on `lane_no = 0` — a value no real draw
+uses — so `uq_lane` is never violated mid-swap.
+
+### Advancement
+
+A race's **first** round draws from its approved `race_entries`. Every
+**later** round draws from the boats flagged `qualified` in the round before
+(`Result::qualifiersForRound()`), shaped identically so the lane board treats
+the two pools alike. That single rule is what makes the ladder work; there is
+no separate "advance" step to forget to run.
+
+`Result::autoQualify()` ticks the top N finishers of each heat, where N is the
+round's `qualify_per_heat` (0 for a final). The ticks stay editable by hand.
+
+### Positions and times ⚠
+
+`results` stores both `race_time` (normalised to `MM:SS.mmm`) and `position`,
+because a judge may have one, the other or both:
+
+- a position typed by hand always wins;
+- blank positions are derived from the recorded times, fastest first, skipping
+  numbers already claimed by hand (`Result::derivePositions()`);
+- a non-`ok` outcome (DNS / DNF / DSQ) clears both time and position, so a
+  boat that did not finish can never appear on a rank list.
+
+`time_centis` is the sortable projection of `race_time`;
+`normaliseRaceTime()` accepts `4:12.35`, `1:23`, bare `83.45` and comma
+decimals, and rejects anything else so the controller can complain rather than
+store junk.
+
+### Publishing is the visibility gate
+
+`rounds.status` runs `draft → open → locked → published`. Reports, the rank
+list, the club tally and both display screens read **published rounds only**.
+Publishing a race's last round also moves the programme item to
+`result_published`, keeping the Order of Events honest without a second step.
+
+The event-wise rank list takes 1st–4th from each race's **last published**
+round, so a race whose final is still provisional shows "no published result
+yet" rather than its semi-final places.
+
+## 4. Request lifecycle
+
+1. `app/public/index.php` loads `app/.env`, installs an exception handler,
+   registers the PSR-style autoloader, starts the session and builds the route
+   table.
+2. `Core\Router` matches on a regex and hands `{param}` values to the
+   controller method positionally.
+3. The controller's private `boot()` self-heals the schema, gates on the right
+   session bucket and loads the tenant event. There is no middleware.
+4. `renderWith($layout, $view, $data)` requires the layout, which requires the
+   view. The per-area base controllers wrap this as `$this->view()`.
+
+## 5. Security posture
+
+- **CSRF** on every mutating POST. `verifyCsrf()` also detects the
+  `post_max_size` overflow shape (empty `$_POST` with a non-zero
+  `CONTENT_LENGTH`) and returns "upload too large" rather than a bare 403.
+- **Obfuscated URL ids.** `Core\Hash` HMAC-signs each id under a context
+  string, so an event token cannot be replayed as a team id — `selftest.php`
+  asserts exactly that.
+- **Eligibility is re-checked server-side.** Every lane endpoint re-verifies
+  the round is unfrozen, the heat belongs to the round, the lane is inside the
+  round's lane count and the boat is in this round's pool, so a hand-crafted
+  POST cannot bypass the UI.
+- **Uploads** go through `Core\FileUpload`, which checks size, extension and
+  MIME, and stores under a random filename.
+- **Display screens** need no app session; a per-event PIN gates them when set
+  and the grant is remembered per event in the session.
+
+## 6. Extension points
+
+- **Public pages** — `Controllers\PublicController`, `app/views/public/`, and
+  the `PUBLIC` section of the route table. Deliberately a stub.
+- **Mail** — `app/config/app.php` carries SMTP settings; there is no mailer
+  yet, so generated passwords are shown once in a flash message. Dropping in
+  a `Core\Mailer` and calling it where those flashes are raised is the whole
+  job.
+- **Round types** — `Round::TYPES` and `Round::DEFAULT_LADDER` are constants;
+  add a type or change the seeded ladder in one place.
+- **Privileges** — `EventUser::PRIVILEGES` plus `PRIVILEGE_META` drive the
+  nav, the dashboard cards and the account form. Adding one means adding a
+  `requirePrivilege()` call in the new controller and nothing else.
+
+## 7. Known gaps
+
+- No email delivery, so credentials must be copied from the flash message.
+- No pagination on the team or programme lists; filtering is client-side,
+  which is right for a regatta's scale but not for thousands of rows.
+- Times are stored to milliseconds but entered by hand — there is no timing
+  hardware integration.
+- `tools/selftest.php` covers the pure logic and the PDF pipeline; the
+  database-backed paths have no automated test because the build environment
+  has no MySQL.

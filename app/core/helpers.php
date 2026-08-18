@@ -108,6 +108,8 @@ function hid_round(int $id): string            { return \Core\Hash::encode($id, 
 function hid_round_decode($v): int             { return \Core\Hash::decodeOrInt($v, 'round'); }
 function hid_heat(int $id): string             { return \Core\Hash::encode($id, 'heat'); }
 function hid_heat_decode($v): int              { return \Core\Hash::decodeOrInt($v, 'heat'); }
+function hid_alloc(int $id): string            { return \Core\Hash::encode($id, 'allocation'); }
+function hid_alloc_decode($v): int             { return \Core\Hash::decodeOrInt($v, 'allocation'); }
 
 // ── Dates, times, formatting ─────────────────────────────────────────────────
 

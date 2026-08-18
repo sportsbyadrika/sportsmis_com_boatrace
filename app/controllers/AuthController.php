@@ -2,7 +2,7 @@
 namespace Controllers;
 
 use Core\{Controller, Auth};
-use Models\{Schema, User, Event, EventAdmin, EventUser};
+use Models\{Schema, User, EventAdmin, EventUser};
 
 /**
  * Sign-in for all three roles. Each area writes to its own session bucket
