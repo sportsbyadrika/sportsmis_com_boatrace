@@ -303,7 +303,57 @@ yet" rather than its semi-final places.
   nav, the dashboard cards and the account form. Adding one means adding a
   `requirePrivilege()` call in the new controller and nothing else.
 
-## 7. Why vendor/ is committed
+## 7. Serving public results at scale
+
+On a big race day the public page is the only part of this system under real
+load — tens of thousands of people refreshing at once, on phones, on a crowded
+network. Nothing dynamic survives that on shared hosting, so the public path
+executes no PHP and touches no database.
+
+### How it works
+
+`Services\ResultSnapshot::publish()` renders the whole event to static files
+under `app/public/live/<EVENT_CODE>/`:
+
+| File | Role | Cache |
+|---|---|---|
+| `manifest.json` | ~150 bytes: current version + payload filename | `max-age=5, stale-while-revalidate=30` |
+| `results-<v>.json` | the payload | `max-age=31536000, immutable` |
+| `index.html` | the page itself, plain HTML + JS | `max-age=60` |
+
+The client polls only the **manifest**. The payload's name changes with its
+version, so it is immutable and fetched exactly once per change — a browser or
+CDN never revalidates it. That is the difference between 30,000 clients pulling
+200 KB every 10 seconds (600 MB/s, hopeless) and pulling 150 bytes on the same
+cadence, mostly served from cache.
+
+### Writes are atomic
+
+Every file goes to a temporary name **in the same directory**, is flushed and
+`fsync`ed, has its permissions set, and is then `rename()`d over the target.
+`rename()` is atomic within a filesystem, so a reader gets the whole old file
+or the whole new one — never a half-written response. Permissions are set
+before the rename, or a reader could catch the file in the instant between
+appearing and becoming readable.
+
+**Ordering matters as much as atomicity:** the payload is written first and the
+manifest last. Until the manifest points at the new payload, clients keep using
+the old one, so the swap is never half-applied. Reversing that order would
+publish a manifest naming a file that does not exist yet.
+
+Old payloads are kept for a few versions so requests already in flight still
+resolve, and stale temp files from an interrupted publish are cleaned up.
+
+### What is NOT solved here
+
+A CDN. This design removes PHP and MySQL from the hot path and makes the
+responses cacheable, which is the necessary half — but a single shared-hosting
+origin still has to serve the first request from every cold client. **Put
+Cloudflare (or any CDN) in front of the subdomain and let it cache `/live/`.**
+The origin then sees a handful of requests per minute regardless of crowd size.
+Without that, the file layout helps but the origin is still the ceiling.
+
+## 8. Why vendor/ is committed
 
 Dompdf is the only dependency. It is pure PHP with no build step, and the
 cPanel deployment shell has no composer on its `PATH` — the guarded
@@ -326,7 +376,7 @@ set regional-language text.
 actually tracks it, and that no package carries a nested `.git` — so this
 cannot silently regress into a dead PDF button again.
 
-## 8. Known gaps
+## 9. Known gaps
 
 - No email delivery, so credentials must be copied from the flash message.
 - No pagination on the team or programme lists; filtering is client-side,

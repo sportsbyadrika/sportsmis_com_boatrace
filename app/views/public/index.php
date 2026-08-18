@@ -14,11 +14,11 @@
       <h1 class="fw-bold mb-2">SportsMIS<sup style="font-size:.45em">&reg;</sup> Regatta</h1>
       <div class="sms-subbrand mb-3">Boat Race Event Management</div>
       <p class="text-muted mb-4">
-        The public results experience for spectators is coming soon.
-        Organisers and race officials can sign in below.
+        Follow the racing live, or sign in to run an event.
       </p>
       <div class="d-flex flex-wrap gap-2 justify-content-center">
-        <a href="/login" class="btn btn-primary"><i class="bi bi-box-arrow-in-right me-1"></i>Sign in</a>
+        <a href="/results" class="btn btn-primary btn-lg"><i class="bi bi-trophy me-1"></i>Live Results</a>
+        <a href="/login" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-in-right me-1"></i>Sign in</a>
         <a href="/display" class="btn btn-outline-secondary"><i class="bi bi-tv me-1"></i>Display screens</a>
       </div>
     </div>

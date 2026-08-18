@@ -83,6 +83,16 @@ class Event extends Model
         static::update('events', ['code' => $code], ['id' => $id]);
     }
 
+    /** Events a spectator may be shown — anything not still a draft. */
+    public static function publicListing(): array
+    {
+        return static::rows(
+            "SELECT * FROM events
+              WHERE status IN ('active','completed')
+              ORDER BY COALESCE(start_date, '9999-12-31') DESC, id DESC"
+        );
+    }
+
     /** Headline counts for the super admin dashboard. */
     public static function platformStats(): array
     {

@@ -189,6 +189,37 @@ class EventAdminRaceController extends EventAdminBase
         $this->redirect($back, 'Boat photo removed.');
     }
 
+    /** The picture shown on this race's public card. */
+    public function raceImage(string $hash): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+        $race = $this->raceOr404($hash);
+        $back = '/event-admin/order-of-events';
+
+        if (empty($_FILES['image']['name'])) {
+            $this->redirect($back, 'Choose an image first.', 'error');
+        }
+        try {
+            $url = (new FileUpload())->upload($_FILES['image'], 'races', true);
+        } catch (\RuntimeException $e) {
+            $this->redirect($back, $e->getMessage(), 'error');
+        }
+
+        EventRace::updateById((int)$race['id'], ['image' => $url]);
+        $this->redirect($back, 'Race image updated.');
+    }
+
+    public function raceImageDelete(string $hash): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+        $race = $this->raceOr404($hash);
+
+        EventRace::updateById((int)$race['id'], ['image' => null]);
+        $this->redirect('/event-admin/order-of-events', 'Race image removed.');
+    }
+
     // ── Round schedule ───────────────────────────────────────────────────────
     // A race carries one slot; its rounds may each take their own, so the
     // preliminary heats, the semi-finals and the final can run at different

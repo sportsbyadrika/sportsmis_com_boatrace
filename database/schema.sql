@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS event_races (
     code          VARCHAR(30) NULL,
     name          VARCHAR(200) NOT NULL,
     name_regional VARCHAR(200) NULL,
+    image         VARCHAR(255) NULL COMMENT 'picture on the public race card',
     boat_class    VARCHAR(120) NULL,
     category      VARCHAR(120) NULL,
     gender        ENUM('open','men','women','mixed') NOT NULL DEFAULT 'open',

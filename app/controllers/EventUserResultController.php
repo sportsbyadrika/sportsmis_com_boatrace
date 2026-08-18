@@ -167,7 +167,18 @@ class EventUserResultController extends EventUserBase
             EventRace::updateById((int)$round['event_race_id'], ['status' => 'result_published']);
         }
 
+        // The public page is served from a static snapshot, so publishing a
+        // round has to refresh it — otherwise the result is "published" in the
+        // race office and invisible to everyone outside it. Never let a
+        // snapshot failure undo the publish itself.
+        $note = '';
+        try {
+            \Services\ResultSnapshot::publish($this->eventId());
+        } catch (\Throwable $e) {
+            $note = ' The public results page could not be refreshed — republish it from Displays.';
+        }
+
         $this->json(['success' => true, 'reload' => true,
-                     'message' => 'Round ' . Round::STATUSES[$status] . '.']);
+                     'message' => 'Round ' . Round::STATUSES[$status] . '.' . $note]);
     }
 }

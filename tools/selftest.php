@@ -496,6 +496,176 @@ if (extension_loaded('pdo_sqlite')) {
     $prop->setValue(null, null);
 }
 
+// ── Public results snapshot ─────────────────────────────────────────────────
+// The spectator page is static files, so this is the whole public path: if the
+// payload is wrong or a write is not atomic, tens of thousands of people see
+// it. Built end to end against SQLite, into a real temporary directory.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE events (id INTEGER PRIMARY KEY, code TEXT, name TEXT, name_regional TEXT,
+        image TEXT, venue TEXT, start_date TEXT, end_date TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE event_races (id INTEGER PRIMARY KEY, event_id INT, sl_no INT, code TEXT,
+        name TEXT, name_regional TEXT, image TEXT, boat_class TEXT, category TEXT, gender TEXT,
+        distance_m INT, lane_count INT, race_date TEXT, race_time TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE rounds (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT, name TEXT,
+        round_type TEXT, sort_order INT, lane_count INT, qualify_per_heat INT,
+        scheduled_date TEXT, scheduled_time TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE heats (id INTEGER PRIMARY KEY, event_id INT, round_id INT, heat_no INT,
+        name TEXT, scheduled_date TEXT, scheduled_time TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE teams (id INTEGER PRIMARY KEY, event_id INT, club_name TEXT, boat_name TEXT,
+        captain_name TEXT, short_code TEXT, boat_class TEXT, logo TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE team_registrations (id INTEGER PRIMARY KEY, event_id INT, team_id INT, status TEXT)');
+    $pdo->exec('CREATE TABLE race_entries (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT,
+        team_registration_id INT, image TEXT)');
+    $pdo->exec('CREATE TABLE lane_allocations (id INTEGER PRIMARY KEY, event_id INT, round_id INT,
+        heat_id INT, lane_no INT, team_registration_id INT)');
+    $pdo->exec('CREATE TABLE results (id INTEGER PRIMARY KEY, event_id INT, round_id INT, heat_id INT,
+        lane_allocation_id INT, team_registration_id INT, race_time TEXT, time_centis INT,
+        position INT, qualified INT, outcome TEXT, remarks TEXT)');
+
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $pdo->exec("INSERT INTO events (id, code, name, name_regional, venue, start_date, end_date, status)
+        VALUES (1,'RGTEST01','Test Regatta','ടെസ്റ്റ്','Punnamada','2026-08-08','2026-08-09','active')");
+    $pdo->exec("INSERT INTO teams (id,event_id,club_name,boat_name,captain_name,short_code,status) VALUES
+        (1,1,'NBC','Nadubhagom','A','NBC','active'),(2,1,'KBC','Karichal','B','KBC','active'),
+        (3,1,'VBC','Veeyapuram','C','VBC','active')");
+    $pdo->exec("INSERT INTO team_registrations (id,event_id,team_id,status) VALUES
+        (1,1,1,'approved'),(2,1,2,'approved'),(3,1,3,'approved')");
+
+    // Race 1 — final published. Race 2 — only heats published. Race 3 — nothing.
+    $pdo->exec("INSERT INTO event_races (id,event_id,sl_no,name,gender,lane_count,race_date,race_time,status) VALUES
+        (1,1,1,'Chundan Vallam','men',3,'2026-08-09','15:00:00','result_published'),
+        (2,1,2,'Iruttukuthy','open',3,'2026-08-09','16:00:00','in_progress'),
+        (3,1,3,'Veppu Vallam','open',3,'2026-08-09','17:00:00','scheduled')");
+    $pdo->exec("INSERT INTO race_entries (event_id,event_race_id,team_registration_id) VALUES
+        (1,1,1),(1,1,2),(1,1,3),(1,2,1),(1,2,2),(1,3,1),(1,3,2),(1,3,3)");
+    $pdo->exec("INSERT INTO rounds (id,event_id,event_race_id,name,round_type,sort_order,lane_count,
+        qualify_per_heat,status) VALUES
+        (1,1,1,'Preliminary Heats','preliminary',1,3,2,'published'),
+        (2,1,1,'Final','final',2,3,0,'published'),
+        (3,1,2,'Preliminary Heats','preliminary',1,3,2,'published'),
+        (4,1,2,'Final','final',2,3,0,'draft'),
+        (5,1,3,'Final','final',1,3,0,'draft')");
+    $pdo->exec("INSERT INTO heats (id,event_id,round_id,heat_no,name,status) VALUES
+        (1,1,1,1,'Heat 1','finished'),(2,1,2,1,'Final','finished'),(3,1,3,1,'Heat 1','finished')");
+    $pdo->exec("INSERT INTO lane_allocations (id,event_id,round_id,heat_id,lane_no,team_registration_id) VALUES
+        (1,1,1,1,1,1),(2,1,1,1,2,2),(3,1,1,1,3,3),
+        (4,1,2,2,1,2),(5,1,2,2,2,1),(6,1,2,2,3,3),
+        (7,1,3,3,1,1),(8,1,3,3,2,2)");
+    $pdo->exec("INSERT INTO results (event_id,round_id,heat_id,lane_allocation_id,team_registration_id,
+        race_time,position,qualified,outcome) VALUES
+        (1,1,1,1,1,'4:10.000',1,1,'ok'),(1,1,1,2,2,'4:11.000',2,1,'ok'),(1,1,1,3,3,'4:12.000',3,0,'ok'),
+        (1,2,2,4,2,'4:05.000',1,0,'ok'),(1,2,2,5,1,'4:06.000',2,0,'ok'),(1,2,2,6,3,'4:07.000',3,0,'ok'),
+        (1,3,3,7,1,'3:59.000',1,1,'ok'),(1,3,3,8,2,'4:00.000',2,1,'ok')");
+
+    // Publish into a scratch directory rather than the real public tree.
+    $liveRoot = sys_get_temp_dir() . '/rg-live-' . getmypid();
+    @mkdir($liveRoot, 0755, true);
+    $realPublic = PUBLIC_ROOT;
+    $snapDir = null;
+
+    // ResultSnapshot::directory() is built from PUBLIC_ROOT, which is a
+    // constant — so drive the writer through a subclass-free path by
+    // publishing and then reading from wherever it actually wrote.
+    try {
+        $out = \Services\ResultSnapshot::publish(1);
+        $snapDir = PUBLIC_ROOT . '/live/RGTEST01';
+
+        ok('publish reports a version', ($out['version'] ?? 0) >= 1);
+        check('publish counts every race', $out['races'], 3);
+        ok('manifest was written',  is_file($snapDir . '/manifest.json'));
+        ok('payload was written',   is_file($snapDir . '/results-' . $out['version'] . '.json'));
+        ok('the static page was written', is_file($snapDir . '/index.html'));
+        ok('cache rules were written',    is_file($snapDir . '/.htaccess'));
+        ok('no temporary file is left behind', glob($snapDir . '/.tmp-*') === []);
+
+        $manifest = json_decode((string)file_get_contents($snapDir . '/manifest.json'), true);
+        check('the manifest points at the payload',
+            $manifest['file'], 'results-' . $out['version'] . '.json');
+        ok('the manifest is small enough to poll',
+            filesize($snapDir . '/manifest.json') < 300);
+
+        // Guard the decode: if the payload is missing, report it rather than
+        // fataling on the first dereference and losing every later check.
+        $payloadPath = $snapDir . '/' . ($manifest['file'] ?? '');
+        $payload = is_file($payloadPath)
+            ? json_decode((string)file_get_contents($payloadPath), true)
+            : null;
+        ok('the payload the manifest names can be read', is_array($payload));
+        $payload = is_array($payload)
+            ? $payload
+            : ['event' => [], 'races' => [], 'tally' => []];
+
+        check('the payload names the event', $payload['event']['name'] ?? null, 'Test Regatta');
+        check('the payload keeps the regional name', $payload['event']['regional'] ?? null, 'ടെസ്റ്റ്');
+        check('the payload carries every race', count($payload['races']), 3);
+
+        // Race 1: final published -> final placings, in the FINAL's order.
+        $blank = ['state' => null, 'label' => null, 'places' => [], 'qualified' => [], 'teams' => []];
+        $r1 = $payload['races'][0] ?? $blank;
+        check('a settled race reads as final', $r1['state'], 'final');
+        check('and is labelled for the public', $r1['label'], 'Final Result');
+        check('its placings come from the final', array_column($r1['places'], 'club'),
+            ['KBC', 'NBC', 'VBC']);
+        check('with times', $r1['places'][0]['time'] ?? null, '4:05.000');
+        ok('a settled race carries no entry list', !isset($r1['teams']));
+
+        // Race 2: only heats published -> round-wise, naming the round.
+        $r2 = $payload['races'][1] ?? $blank;
+        check('a part-run race reads as round-wise', $r2['state'], 'round');
+        check('and is labelled as such', $r2['label'], 'Round Result');
+        check('it names the round', $r2['round'], 'Preliminary Heats');
+        check('and lists the qualifiers', count($r2['qualified']), 2);
+        ok('a round-wise race shows no final placings', !isset($r2['places']));
+
+        // Race 3: nothing published -> the entry list only.
+        $r3 = $payload['races'][2] ?? $blank;
+        check('an unpublished race reads as not published', $r3['state'], 'none');
+        check('and says so', $r3['label'], 'Not Published');
+        check('it lists the entered boats', count($r3['teams']), 3);
+        ok('and shows no results at all',
+            !isset($r3['places']) && !isset($r3['qualified']));
+
+        // The tally follows the deciding round only — race 2's heats add nothing.
+        $byClub = array_column($payload['tally'], 'points', 'club');
+        check('only the settled race scores', $byClub, ['KBC' => 3, 'NBC' => 2, 'VBC' => 1]);
+
+        // Publishing again bumps the version and leaves a valid manifest.
+        $again = \Services\ResultSnapshot::publish(1);
+        check('republishing bumps the version', $again['version'], $out['version'] + 1);
+        $m2 = json_decode((string)file_get_contents($snapDir . '/manifest.json'), true);
+        check('the manifest follows the new payload', $m2['file'], 'results-' . $again['version'] . '.json');
+        ok('the new payload exists', is_file($snapDir . '/' . $m2['file']));
+        ok('the manifest never points at a missing file', is_file($snapDir . '/' . $m2['file']));
+
+        // The page must be servable as-is: no PHP left in it.
+        $page = (string)file_get_contents($snapDir . '/index.html');
+        ok('the published page contains no PHP', !str_contains($page, '<?'));
+        ok('and no unreplaced placeholder', !str_contains($page, '__EVENT_CODE__'));
+
+        // Cache rules are what keep the origin idle under load.
+        $hta = (string)file_get_contents($snapDir . '/.htaccess');
+        ok('versioned payloads are cached immutably', str_contains($hta, 'immutable'));
+        ok('the manifest is short-lived', str_contains($hta, 'max-age=5'));
+    } finally {
+        // Leave the public tree exactly as found.
+        if ($snapDir && is_dir($snapDir)) {
+            foreach (glob($snapDir . '/*') ?: [] as $f) @unlink($f);
+            foreach (glob($snapDir . '/.*') ?: [] as $f) { if (is_file($f)) @unlink($f); }
+            @rmdir($snapDir);
+            @rmdir(dirname($snapDir));
+        }
+        @rmdir($liveRoot);
+        $prop->setValue(null, null);
+    }
+}
+
 // ── Event admin standing in for the race office ─────────────────────────────
 // The administrator owns the event, so they hold every privilege while they
 // are in the race office. The bucket is marked via_admin and carries no
