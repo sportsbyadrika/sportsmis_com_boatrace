@@ -178,6 +178,8 @@ $router->post('/event-admin/users/{hash}/delete',             'EventAdminUserCon
 $router->get ('/event-user/dashboard',                     'EventUserController@dashboard');
 
 $router->get ('/event-user/rounds',                        'EventUserRoundController@index');
+$router->get ('/event-user/rounds/report/print',            'EventUserRoundController@reportPrint');
+$router->get ('/event-user/rounds/report/pdf',              'EventUserRoundController@reportPdf');
 $router->get ('/event-user/rounds/{hash}',                 'EventUserRoundController@show');
 $router->post('/event-user/rounds/{hash}/seed',            'EventUserRoundController@seedLadder');
 $router->post('/event-user/rounds/{hash}/rounds',          'EventUserRoundController@storeRound');

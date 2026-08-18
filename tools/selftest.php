@@ -868,6 +868,19 @@ if (is_file($rootHt)) {
     }
 }
 
+// ── Order of Events report: the masthead must repeat on every page ──────────
+// Dompdf paints a `position: fixed` block on each page; the @page top margin
+// has to clear it or the header overlaps the table. Both halves are required,
+// and losing either is invisible until someone prints a long programme.
+$reportTpl = APP_ROOT . '/views/event-user/rounds/report-pdf.php';
+if (is_file($reportTpl)) {
+    $tpl = (string)file_get_contents($reportTpl);
+    ok('the report masthead is position:fixed (repeats per page)',
+        (bool)preg_match('/#masthead\s*\{[^}]*position:\s*fixed/s', $tpl));
+    ok('the report reserves a top margin for it',
+        (bool)preg_match('/@page\s*\{\s*margin:\s*(\d+)mm/', $tpl, $mm) && (int)$mm[1] >= 25);
+}
+
 // ── PDF pipeline ────────────────────────────────────────────────────────────
 // vendor/ ships with the repository so the PDF routes work without composer
 // on the server. If it ever stops being committed, the reports go dead on the
@@ -959,6 +972,34 @@ if (!class_exists(\Dompdf\Dompdf::class)) {
     $pdf = \Core\Pdf::render($render('event-user/reports/heat-sheet-pdf',
         compact('event', 'round', 'heats', 'logo', 'footer')), 'A4', 'portrait', true);
     ok('heat-sheet PDF renders', str_starts_with($pdf, '%PDF-') && strlen($pdf) > 1000);
+
+    // Order of Events report — deliberately long enough to break across pages,
+    // so the repeating masthead is exercised rather than assumed.
+    $mkHeat = fn(int $n) => ['id' => $n, 'heat_no' => $n, 'name' => "Heat {$n}",
+        'scheduled_date' => '2026-08-08', 'scheduled_time' => '09:30:00', 'allocated_count' => 4];
+    $mkRound = fn(string $name, string $type, int $order, int $heats) => [
+        'id' => $order, 'name' => $name, 'round_type' => $type, 'sort_order' => $order,
+        'lane_count' => 5, 'qualify_per_heat' => $type === 'final' ? 0 : 2, 'status' => 'draft',
+        'scheduled_date' => null, 'scheduled_time' => null, 'heat_count' => $heats,
+        'heats' => array_map($mkHeat, range(1, $heats))];
+    $races = [];
+    for ($i = 1; $i <= 14; $i++) {
+        $races[] = ['id' => $i, 'sl_no' => $i, 'name' => "Race Number {$i} Chundan Vallam",
+            'name_regional' => 'ചുണ്ടൻ വള്ളം', 'gender' => 'men', 'boat_class' => 'Chundan Vallam',
+            'distance_m' => 1400, 'lane_count' => 5, 'race_date' => '2026-08-08',
+            'race_time' => '09:30:00', 'status' => 'scheduled',
+            'rounds' => [$mkRound('Preliminary Heats', 'preliminary', 1, 3),
+                         $mkRound('Final', 'final', 2, 1)]];
+    }
+    $pdf = \Core\Pdf::render($render('event-user/rounds/report-pdf',
+        compact('event', 'races', 'logo', 'footer')), 'A4', 'portrait', true);
+    ok('rounds report PDF renders', str_starts_with($pdf, '%PDF-'));
+
+    // Page objects sit outside the compressed content streams, so they can be
+    // counted without a PDF library.
+    preg_match_all('#/Type\s*/Page[^s]#', $pdf, $pageObjects);
+    ok('the rounds report spans several pages (' . count($pageObjects[0]) . ')',
+        count($pageObjects[0]) > 1);
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────
