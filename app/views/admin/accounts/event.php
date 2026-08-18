@@ -19,9 +19,10 @@
 <div class="alert alert-info d-flex gap-2 align-items-start">
   <i class="bi bi-info-circle mt-1"></i>
   <div class="small">
-    An event admin signs in at <a href="/event-admin/login" target="_blank" rel="noopener">/event-admin/login</a>
-    with the Event Code <strong><?= e($event['code']) ?></strong>, their email and the password shown once
-    when the account is created or reset.
+    An event admin signs in at <a href="/login" target="_blank" rel="noopener">/login</a>
+    with their email and the password shown once when the account is created or reset.
+    There is one sign-in page for everyone — the workspace they land in follows from the account,
+    so the Event Code (<strong><?= e($event['code']) ?></strong>) is not needed to sign in.
   </div>
 </div>
 

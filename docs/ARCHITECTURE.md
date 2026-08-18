@@ -22,16 +22,37 @@ is what event admins, event users and display operators all type.
 
 `Core\Auth` keeps three independent buckets in one PHP session:
 
-| Bucket | Table | Sign-in |
+| Bucket | Table | Opened for |
 |---|---|---|
-| `$_SESSION['user']` | `users` | email + password |
-| `$_SESSION['event_admin']` | `event_admins` | Event Code + email + password |
-| `$_SESSION['event_user']` | `event_users` | Event Code + email + password |
+| `$_SESSION['user']` | `users` | platform accounts |
+| `$_SESSION['event_admin']` | `event_admins` | event administrators |
+| `$_SESSION['event_user']` | `event_users` | race office |
 
 This mirrors SportsMIS's `event_staff` bucket, and it means a platform owner
 debugging an event portal doesn't lose their admin session. Per-event
 credentials never touch `users`; uniqueness is per `(event_id, email)`, so one
 person can hold accounts on several regattas with one address.
+
+### One sign-in form
+
+There is a single `/login` taking email + password.
+`AuthController::resolveCandidates()` verifies the password against all three
+tables and returns every account it opens; `signIn()` then opens the matching
+bucket. Three consequences worth knowing:
+
+- **The page reveals nothing.** It previously had a tab per role, which
+  advertised the entire role structure to anyone who loaded it.
+- **Failures are indistinguishable.** "No such address", "wrong password" and
+  "account disabled" all produce the same message.
+- **Ambiguity is resolved after verification.** When a password opens several
+  accounts, the candidate list — ids only, no password material — is held in
+  `$_SESSION['login_choices']` for five minutes and the user picks. The POST
+  carries an index into that list, never an account id, so it cannot name an
+  account the session hasn't already proved the password for.
+
+The Event Code is no longer typed at sign-in. It remains the tenant's public
+handle — on the programme, on reports, and at `/display` — but it is not a
+credential, and treating it as one gave a false impression of security.
 
 `EventUserBase::boot()` re-reads the account's privileges from the database on
 every request rather than trusting the session copy, so a grant or revoke by

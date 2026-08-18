@@ -10,6 +10,9 @@ use Models\EventUser;
  * Each account holds a subset of EventUser::PRIVILEGES; both the portal nav
  * and every race-office controller gate on that set, so an account with only
  * `result_entry` sees nothing else and cannot reach it by URL either.
+ *
+ * Accounts sign in on the single /login form with email and password; the
+ * Event Code identifies the regatta but is not part of signing in.
  */
 class EventAdminUserController extends EventAdminBase
 {
@@ -61,8 +64,8 @@ class EventAdminUserController extends EventAdminBase
 
         // Shown once — the hash is all that is stored.
         $this->redirect('/event-admin/users', sprintf(
-            'Account created. Event Code: %s · Email: %s · Temporary password: %s — share these now, they are not shown again.',
-            $this->event['code'], $email, $password
+            'Account created. Sign in at %s · Email: %s · Temporary password: %s — share these now, they are not shown again.',
+            url('/login'), $email, $password
         ));
     }
 

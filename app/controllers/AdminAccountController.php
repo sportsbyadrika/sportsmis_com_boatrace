@@ -6,7 +6,8 @@ use Models\{Schema, Event, EventAdmin};
 
 /**
  * Super Admin -> Event Admin accounts. One event can carry several
- * administrators; each signs in with the Event Code + their email.
+ * administrators; each signs in on the single /login form with their email
+ * and password — the Event Code is not a credential.
  *
  * Passwords are generated here and shown once, on the redirect — they are
  * never stored in clear and cannot be read back.
@@ -98,8 +99,8 @@ class AdminAccountController extends Controller
 
         // Shown once, in the flash — there is no way to retrieve it later.
         $this->redirect($backTo, sprintf(
-            'Account created. Event Code: %s · Email: %s · Temporary password: %s — share these now, they are not shown again.',
-            $event['code'] ?: ensureEventCode((int)$event['id']), $email, $password
+            'Account created. Sign in at %s · Email: %s · Temporary password: %s — share these now, they are not shown again.',
+            url('/login'), $email, $password
         ));
     }
 

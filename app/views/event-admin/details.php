@@ -140,8 +140,10 @@
       <h6 class="fw-bold mb-2"><i class="bi bi-hash me-2"></i>Event Code</h6>
       <div class="fs-4"><code><?= e($event['code']) ?></code></div>
       <p class="small text-muted mb-0 mt-2">
-        Share this with your race-office staff — they need it alongside their email to sign in at
-        <a href="/event-user/login" target="_blank" rel="noopener">/event-user/login</a>.
+        Identifies this regatta on the programme, the reports and the display screens.
+        It is <strong>not</strong> needed to sign in — everyone uses
+        <a href="/login" target="_blank" rel="noopener">/login</a> with their email and password —
+        but a venue operator does need it to open a display screen.
       </p>
     </div>
   </div>

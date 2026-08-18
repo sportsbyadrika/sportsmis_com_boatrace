@@ -24,20 +24,20 @@ abstract class EventUserBase extends Controller
         try { Schema::ensureAll(); } catch (\Throwable $e) {}
 
         if (!Auth::eventUserCheck()) {
-            $this->redirect('/event-user/login', 'Please sign in to continue.', 'warning');
+            $this->redirect('/login', 'Please sign in to continue.', 'warning');
         }
 
         $session = Auth::eventUser();
         $user    = EventUser::findById((int)$session['id']);
         if (!$user || $user['status'] !== 'active') {
             Auth::eventUserLogout();
-            $this->redirect('/event-user/login', 'Your account is no longer active.', 'error');
+            $this->redirect('/login', 'Your account is no longer active.', 'error');
         }
 
         $event = Event::findById((int)$user['event_id']);
         if (!$event) {
             Auth::eventUserLogout();
-            $this->redirect('/event-user/login', 'That event no longer exists.', 'error');
+            $this->redirect('/login', 'That event no longer exists.', 'error');
         }
         $event['code'] = $event['code'] ?: ensureEventCode((int)$event['id']);
 
