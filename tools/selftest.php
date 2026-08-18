@@ -94,6 +94,22 @@ check('avatarInitials', avatarInitials('Nadubhagom Boat Club'), 'NC');
 check('positionClass(1)', positionClass(1), 'pos-gold');
 check('positionClass(9)', positionClass(9), 'pos-fourth');
 
+// ── Seed data ───────────────────────────────────────────────────────────────
+// database/seeds.sql documents a bootstrap password in a comment and stores
+// its bcrypt hash. If the two ever drift, a fresh install cannot sign in —
+// so verify every hash literal in the file against the documented password.
+$seedFile = $root . '/database/seeds.sql';
+if (is_file($seedFile)) {
+    $sql = (string)file_get_contents($seedFile);
+    preg_match_all('/\$2y\$\d{2}\$[A-Za-z0-9.\/]{53}/', $sql, $m);
+    $hashes = array_unique($m[0]);
+    ok('seeds.sql contains a password hash', count($hashes) > 0);
+    foreach ($hashes as $hash) {
+        ok('seed hash matches the documented bootstrap password',
+            password_verify('ChangeMe@123', $hash));
+    }
+}
+
 // ── PDF pipeline ────────────────────────────────────────────────────────────
 if (!class_exists(\Dompdf\Dompdf::class)) {
     echo "note: Dompdf not installed — skipping PDF checks (run `composer install`).\n";

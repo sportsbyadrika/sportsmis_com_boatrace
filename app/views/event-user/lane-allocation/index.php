@@ -134,7 +134,7 @@ $available = array_values(array_filter($pool, fn($p) => !in_array((int)$p['regis
                         $la = $lanes[(int)$h['id']][$lane] ?? null; ?>
                   <tr class="rg-lane-row" data-heat="<?= e($hh) ?>" data-lane="<?= $lane ?>"
                       <?php if ($la): ?>
-                        data-allocation="<?= e(hid_team((int)$la['id'])) ?>"
+                        data-allocation="<?= e(hid_alloc((int)$la['id'])) ?>"
                         data-registration="<?= (int)$la['team_registration_id'] ?>"
                         data-boat="<?= e($la['boat_name']) ?>"
                         data-club="<?= e($la['club_name']) ?>"

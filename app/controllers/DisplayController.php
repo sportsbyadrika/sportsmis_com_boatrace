@@ -1,8 +1,8 @@
 <?php
 namespace Controllers;
 
-use Core\{Controller, Auth};
-use Models\{Schema, Event, Round, Result, EventRace};
+use Core\Controller;
+use Models\{Schema, Event, Round, Result};
 
 /**
  * The two public display screens. Both live on the chrome-free `public`

@@ -2,7 +2,7 @@
 namespace Controllers;
 
 use Core\Pdf;
-use Models\{Result, Round, Heat, LaneAllocation, AppSetting};
+use Models\{Result, Round, AppSetting};
 
 /**
  * Race office -> Reports (privilege: reports).

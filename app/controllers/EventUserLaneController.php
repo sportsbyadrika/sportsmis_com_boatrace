@@ -119,7 +119,7 @@ class EventUserLaneController extends EventUserBase
             'team_registration_id' => $regId,
         ]);
 
-        $this->json(['success' => true, 'message' => 'Lane allocated.', 'allocation' => hid_team($id)]);
+        $this->json(['success' => true, 'message' => 'Lane allocated.', 'allocation' => hid_alloc($id)]);
     }
 
     /** Take a boat off its lane and return it to the pool. */
@@ -132,7 +132,7 @@ class EventUserLaneController extends EventUserBase
         $round = $this->roundOr404((string)($_POST['round'] ?? ''));
         $this->assertEditable($round);
 
-        $alloc = LaneAllocation::findById(hid_team_decode((string)($_POST['allocation'] ?? '')));
+        $alloc = LaneAllocation::findById(hid_alloc_decode((string)($_POST['allocation'] ?? '')));
         if (!$alloc || (int)$alloc['round_id'] !== (int)$round['id']) {
             $this->json(['success' => false, 'message' => 'That lane is already empty.'], 422);
         }
@@ -151,7 +151,7 @@ class EventUserLaneController extends EventUserBase
         $round = $this->roundOr404((string)($_POST['round'] ?? ''));
         $this->assertEditable($round);
 
-        $alloc = LaneAllocation::findById(hid_team_decode((string)($_POST['allocation'] ?? '')));
+        $alloc = LaneAllocation::findById(hid_alloc_decode((string)($_POST['allocation'] ?? '')));
         if (!$alloc || (int)$alloc['round_id'] !== (int)$round['id']) {
             $this->json(['success' => false, 'message' => 'That boat is no longer on the board.'], 422);
         }
