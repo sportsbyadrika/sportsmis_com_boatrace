@@ -113,8 +113,16 @@ document.addEventListener('DOMContentLoaded', function () {
           var v = (c.value || '').trim().toLowerCase();
           if (v === '') return;
           if (c.dataset.filterField) {
+            // Exact match against one row attribute — for dropdowns.
             var cell = (row.dataset[c.dataset.filterField] || '').toLowerCase();
             if (cell !== v) visible = false;
+          } else if (c.dataset.filterKeys) {
+            // Contains-match across named row attributes — for search boxes
+            // that should look at particular fields rather than the whole row.
+            var hay = c.dataset.filterKeys.split(',').map(function (k) {
+              return row.dataset[k.trim()] || '';
+            }).join(' ').toLowerCase();
+            if (hay.indexOf(v) === -1) visible = false;
           } else {
             if (row.textContent.toLowerCase().indexOf(v) === -1) visible = false;
           }
@@ -123,6 +131,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (visible) shown++;
       }
       if (counter) counter.textContent = 'Showing ' + shown + ' of ' + rows.length;
+      // Let the page react — a filtered table may need to restate a selection
+      // count, since hiding a row does not clear its checkbox.
+      table.dispatchEvent(new CustomEvent('rg:filtered', {
+        detail: { shown: shown, total: rows.length }
+      }));
     }
 
     controls.forEach(function (c) {

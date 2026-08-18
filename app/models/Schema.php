@@ -328,6 +328,12 @@ class Schema extends Model
             ");
         }
 
+        // A boat's photo AS IT RACES HERE. Distinct from teams.logo (the club
+        // crest): the same club may field a different boat in each race.
+        if (!self::columnExists('race_entries', 'image')) {
+            static::query("ALTER TABLE race_entries ADD COLUMN image VARCHAR(255) NULL AFTER team_registration_id");
+        }
+
         self::$applied['races'] = true;
     }
 

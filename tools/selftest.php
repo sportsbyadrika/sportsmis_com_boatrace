@@ -358,6 +358,89 @@ if (extension_loaded('pdo_sqlite')) {
     $prop->setValue(null, null);
 }
 
+// ── Race entries: saving the list must not destroy boat photos ──────────────
+// Each entry carries the boat's photo for that race. setEntries() used to
+// delete every row and re-insert, which would have thrown those photos away
+// each time somebody ticked one more box — so it is written as a diff, and
+// that is what this pins down.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE team_registrations (id INTEGER PRIMARY KEY, event_id INT, team_id INT, status TEXT)');
+    $pdo->exec('CREATE TABLE race_entries (id INTEGER PRIMARY KEY, event_id INT, event_race_id INT,
+        team_registration_id INT, image TEXT, created_at TEXT)');
+
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $EV = 3; $RACE = 11;
+    // Four approved boats, plus one that is only submitted.
+    $pdo->exec("INSERT INTO team_registrations (id, event_id, team_id, status) VALUES
+        (1,3,101,'approved'), (2,3,102,'approved'), (3,3,103,'approved'),
+        (4,3,104,'approved'), (5,3,105,'submitted')");
+
+    // Distinguishes "no entry row at all" from "entry row with no photo" —
+    // conflating the two would let a dropped boat pass as an un-photographed
+    // one, which is exactly the bug this section is here to catch.
+    $imageOf = function (int $reg) use ($pdo, $RACE) {
+        $st = $pdo->prepare("SELECT image FROM race_entries WHERE event_race_id = ? AND team_registration_id = ?");
+        $st->execute([$RACE, $reg]);
+        $row = $st->fetch();
+        return $row === false ? '__no_entry__' : $row['image'];
+    };
+
+    check('entering three boats', \Models\EventRace::setEntries($EV, $RACE, [1, 2, 3]), 3);
+    check('the entry list reads back',
+        \Models\EventRace::entryRegistrationIds($RACE), [1, 2, 3]);
+
+    // Photos are uploaded against two of them.
+    $map = \Models\EventRace::entryMap($RACE);
+    \Models\EventRace::setEntryImage($map[1]['entry_id'], '/assets/uploads/boats/one.jpg');
+    \Models\EventRace::setEntryImage($map[2]['entry_id'], '/assets/uploads/boats/two.jpg');
+    check('a photo is stored against the entry', $imageOf(1), '/assets/uploads/boats/one.jpg');
+
+    // Saving the list again with one boat added and one removed.
+    check('re-saving the list', \Models\EventRace::setEntries($EV, $RACE, [1, 2, 4]), 3);
+    check('photos survive a re-save', $imageOf(1), '/assets/uploads/boats/one.jpg');
+    check('every kept photo survives',  $imageOf(2), '/assets/uploads/boats/two.jpg');
+    check('a dropped boat is gone',     $imageOf(3), '__no_entry__');
+    check('a newly added boat has no photo yet', $imageOf(4), null);
+    check('the list is exactly what was asked for',
+        \Models\EventRace::entryRegistrationIds($RACE), [1, 2, 4]);
+
+    // Re-saving an identical list must be a complete no-op for the rows.
+    $before = $pdo->query("SELECT id FROM race_entries ORDER BY id")->fetchAll();
+    \Models\EventRace::setEntries($EV, $RACE, [1, 2, 4]);
+    check('an unchanged save does not churn the rows',
+        $pdo->query("SELECT id FROM race_entries ORDER BY id")->fetchAll(), $before);
+
+    // Only approved registrations may be entered.
+    check('a non-approved boat is refused', \Models\EventRace::setEntries($EV, $RACE, [1, 5]), 1);
+    check('and it never reaches the entry list',
+        \Models\EventRace::entryRegistrationIds($RACE), [1]);
+    check('the approved boat kept its photo', $imageOf(1), '/assets/uploads/boats/one.jpg');
+
+    // A boat belonging to another event can never be entered here.
+    check('another event\'s registration is refused',
+        \Models\EventRace::setEntries($EV + 1, $RACE, [1]), 0);
+
+    // Clearing the list empties it.
+    check('clearing the list', \Models\EventRace::setEntries($EV, $RACE, []), 0);
+    check('nothing is left', \Models\EventRace::entryRegistrationIds($RACE), []);
+
+    // findEntry is scoped to its race.
+    \Models\EventRace::setEntries($EV, $RACE, [1]);
+    $entryId = \Models\EventRace::entryMap($RACE)[1]['entry_id'];
+    ok('findEntry finds its own entry', \Models\EventRace::findEntry($RACE, $entryId) !== null);
+    ok('findEntry refuses another race\'s entry',
+        \Models\EventRace::findEntry($RACE + 1, $entryId) === null);
+
+    $prop->setValue(null, null);
+}
+
 // ── Sign-in resolution ──────────────────────────────────────────────────────
 // One /login form resolves the role by checking all three account tables, so
 // the page never advertises the role structure. That resolution is the piece

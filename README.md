@@ -12,7 +12,7 @@ database.
 | Role | Manages |
 |---|---|
 | **Super Admin** (platform owner) | Events, one or more Event Admin accounts per event, platform defaults |
-| **Event Admin** (per event) | Event details, teams (singly or bulk-uploaded from CSV), registrations, the Order of Events, Event User accounts |
+| **Event Admin** (per event) | Event details, teams (singly or bulk-uploaded from CSV), registrations, the Order of Events with per-race entries and boat photos, Event User accounts |
 | **Event User** (per event, privilege-gated) | Rounds & heats, lane allocation, result entry, reports, display screens |
 
 **All three sign in at `/login`** with just an email and password. The server
