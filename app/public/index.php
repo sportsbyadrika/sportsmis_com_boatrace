@@ -173,6 +173,18 @@ $router->post('/event-user/lane-allocation/move',          'EventUserLaneControl
 $router->post('/event-user/lane-allocation/auto-fill',     'EventUserLaneController@autoFill');
 $router->post('/event-user/lane-allocation/clear',         'EventUserLaneController@clear');
 
+$router->get ('/event-user/results',                       'EventUserResultController@index');
+$router->post('/event-user/results/heat',                  'EventUserResultController@saveHeat');
+$router->post('/event-user/results/clear',                 'EventUserResultController@clearHeat');
+$router->post('/event-user/results/auto-qualify',          'EventUserResultController@autoQualify');
+$router->post('/event-user/results/status',                'EventUserResultController@setStatus');
+
+$router->get ('/event-user/reports',                       'EventUserReportController@index');
+$router->get ('/event-user/reports/rank-list/print',       'EventUserReportController@rankListPrint');
+$router->get ('/event-user/reports/rank-list/pdf',         'EventUserReportController@rankListPdf');
+$router->get ('/event-user/reports/heat-sheet/{hash}/print','EventUserReportController@heatSheetPrint');
+$router->get ('/event-user/reports/heat-sheet/{hash}/pdf',  'EventUserReportController@heatSheetPdf');
+
 // ═══════════════════════════════════════════════════════ PUBLIC (stub)
 $router->get ('/public',                           'PublicController@index');
 
