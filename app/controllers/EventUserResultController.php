@@ -31,6 +31,15 @@ class EventUserResultController extends EventUserBase
         $roundHash = trim((string)($_GET['round'] ?? ''));
         $round     = $roundHash !== '' ? Round::findWithRace($this->eventId(), hid_round_decode($roundHash)) : null;
 
+        // No round chosen: the picker, not an empty grid.
+        if (!$round) {
+            $this->view('event-user/results/pick', [
+                'pageTitle' => 'Result Entry',
+                'rounds'    => Round::forEvent($this->eventId()),
+            ]);
+            return;
+        }
+
         $heats = [];
         if ($round) {
             foreach (Heat::forRound((int)$round['id']) as $h) {
@@ -41,7 +50,6 @@ class EventUserResultController extends EventUserBase
 
         $this->view('event-user/results/index', [
             'pageTitle' => 'Result Entry',
-            'rounds'    => Round::forEvent($this->eventId()),
             'round'     => $round,
             'heats'     => $heats,
             'nextRound' => $round ? Round::next($round) : null,

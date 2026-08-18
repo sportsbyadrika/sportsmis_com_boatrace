@@ -24,40 +24,12 @@ $available = array_values(array_filter($pool, fn($p) => !in_array((int)$p['regis
     <h4 class="fw-bold mb-1">Lane Allocation</h4>
     <p class="text-muted mb-0 small">Drag a boat onto a lane — or tap the boat, then tap the lane.</p>
   </div>
-  <form class="d-flex gap-2" method="GET" action="/event-user/lane-allocation">
-    <select class="form-select" name="round" style="min-width:320px"
-            onchange="this.form.submit()">
-      <option value="">Choose a round…</option>
-      <?php
-        $currentRace = null;
-        foreach ($rounds as $r):
-          if ($currentRace !== $r['race_name']) {
-              if ($currentRace !== null) echo '</optgroup>';
-              $currentRace = $r['race_name'];
-              echo '<optgroup label="' . e((int)$r['race_sl_no'] . '. ' . $r['race_name']) . '">';
-          }
-      ?>
-        <option value="<?= e(hid_round((int)$r['id'])) ?>"
-                <?= $round && (int)$round['id'] === (int)$r['id'] ? 'selected' : '' ?>>
-          <?= e($r['name']) ?> — <?= (int)$r['heat_count'] ?> heat<?= (int)$r['heat_count'] === 1 ? '' : 's' ?>,
-          <?= (int)$r['allocated_count'] ?> drawn
-        </option>
-      <?php endforeach; if ($currentRace !== null) echo '</optgroup>'; ?>
-    </select>
-  </form>
+  <a href="/event-user/lane-allocation" class="btn btn-outline-secondary">
+    <i class="bi bi-grid me-1"></i>Change round
+  </a>
 </div>
 
-<?php if (!$round): ?>
-  <div class="sms-empty-state">
-    <i class="bi bi-water"></i>
-    <h5>Choose a round</h5>
-    <p>Pick a race round above to open its lane board.</p>
-    <?php if (!$rounds): ?>
-      <p class="small">No rounds exist yet — create them under <strong>Rounds &amp; Heats</strong>.</p>
-    <?php endif; ?>
-  </div>
-
-<?php elseif (!$heats): ?>
+<?php if (!$heats): ?>
   <div class="sms-empty-state">
     <i class="bi bi-grid-3x3"></i>
     <h5>This round has no heats</h5>
