@@ -95,6 +95,7 @@ The `app/public/assets/uploads/` tree and `storage/dompdf/` must be writable.
 |---|---|
 | Repository path | `/home/olympicd/repositories/sportsmis_com_boatrace` |
 | Deployment path | `/home/olympicd/olympicday.in` |
+| Site | `https://boatrace.olympicday.in` |
 
 Each deploy copies the working tree across, strips `.git`, `.cpanel.yml` and
 `.gitignore` from the target, runs `composer install --no-dev` when composer is
@@ -102,11 +103,19 @@ on `PATH`, and recreates the writable upload and Dompdf directories.
 
 Two things to set up once, by hand:
 
-1. **Document root.** Point the domain at
-   `/home/olympicd/olympicday.in/app/public`, *not* at the deployment path —
-   otherwise `app/.env`, `app/config/` and `database/` are served to the web.
+1. **Document root.** Point `boatrace.olympicday.in` at
+   `/home/olympicd/olympicday.in/app/public`, *not* at the deployment path.
+   Left at the deployment path, Apache finds no index file and serves a
+   directory listing of the whole repository.
+
+   The root `.htaccess` covers that case — it disables listings and rewrites
+   every request into `app/public`, so nothing outside it is reachable — but
+   the document root is still the right fix, and the `.htaccess` is a
+   safety net rather than the design.
 2. **`app/.env`.** It is gitignored, so it never reaches the repository and no
    deploy touches it. Create it once on the server from `app/.env.example`.
+   Set `APP_URL=https://boatrace.olympicday.in`; it builds the copy-and-paste
+   display-screen links shown in the race office.
 
 No migration step is needed: the `Schema::ensureX()` calls upgrade the database
 on the next request. For a brand-new database, import `database/schema.sql`

@@ -147,6 +147,41 @@ if (is_file($envSample)) {
     }
 }
 
+// ── Root .htaccess ──────────────────────────────────────────────────────────
+// Guards the case where the domain's document root is the deployment path
+// rather than app/public. The rule ORDER carries the weight: the loop guard
+// must precede the catch-all, or the catch-all rewrites its own output until
+// Apache gives up with a 500.
+$rootHt = $root . '/.htaccess';
+if (is_file($rootHt)) {
+    $ht = (string)file_get_contents($rootHt);
+    ok('root .htaccess disables directory listings', str_contains($ht, 'Options -Indexes'));
+
+    $guard    = strpos($ht, 'RewriteRule ^app/public/ - [L]');
+    $catchAll = strpos($ht, 'RewriteRule ^(.*)$ app/public/$1 [L]');
+    ok('root .htaccess has the rewrite loop guard', $guard !== false);
+    ok('root .htaccess has the catch-all rewrite', $catchAll !== false);
+    ok('loop guard precedes the catch-all',
+        $guard !== false && $catchAll !== false && $guard < $catchAll);
+    ok('root .htaccess denies dotfiles', str_contains($ht, '<FilesMatch "^\\.">'));
+
+    // Nothing served from app/public may carry a denied extension, or the
+    // inherited rule would 403 a legitimate asset.
+    if (preg_match('/FilesMatch "\\\\\\.\\(([a-z|]+)\\)\\$"/', $ht, $m)) {
+        $denied = explode('|', $m[1]);
+        $clash  = [];
+        $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(PUBLIC_ROOT));
+        foreach ($rii as $f) {
+            if ($f->isDir()) continue;
+            if (str_starts_with($f->getFilename(), '.')) continue;   // covered by the dotfile rule
+            if (in_array(strtolower($f->getExtension()), $denied, true)) {
+                $clash[] = $f->getFilename();
+            }
+        }
+        ok('no served asset matches a denied extension (' . implode(', ', $clash) . ')', $clash === []);
+    }
+}
+
 // ── PDF pipeline ────────────────────────────────────────────────────────────
 if (!class_exists(\Dompdf\Dompdf::class)) {
     echo "note: Dompdf not installed — skipping PDF checks (run `composer install`).\n";
