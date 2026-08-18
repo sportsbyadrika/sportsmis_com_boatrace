@@ -65,13 +65,17 @@ Only one Composer dependency: `dompdf/dompdf`.
 
 ```bash
 git clone <this repo> && cd sportsmis_com_boatrace
-composer install                       # vendors Dompdf
+composer install                        # vendors Dompdf
 
-cp .env.example app/.env                # then fill in the DB_* values
+cp app/.env.example app/.env            # then fill in APP_SECRET and the DB_* values
 mysql -u USER -p -e "CREATE DATABASE sportsmis_regatta CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
 mysql -u USER -p sportsmis_regatta < database/schema.sql
 mysql -u USER -p sportsmis_regatta < database/seeds.sql     # optional
 ```
+
+`app/.env` is gitignored and read on every request by `app/public/index.php`.
+Change `APP_SECRET` — it is the HMAC key behind the obfuscated URL ids, and the
+shipped default is public knowledge.
 
 Point the web server's document root at **`app/public/`**. Apache picks up
 the bundled `.htaccess`; on nginx, route everything to `index.php`:
@@ -82,6 +86,31 @@ location / { try_files $uri $uri/ /index.php?$query_string; }
 ```
 
 The `app/public/assets/uploads/` tree and `storage/dompdf/` must be writable.
+
+### Deploying on cPanel
+
+`.cpanel.yml` drives cPanel's Git™ Version Control deployment:
+
+| | |
+|---|---|
+| Repository path | `/home/olympicd/repositories/sportsmis_com_boatrace` |
+| Deployment path | `/home/olympicd/olympicday.in` |
+
+Each deploy copies the working tree across, strips `.git`, `.cpanel.yml` and
+`.gitignore` from the target, runs `composer install --no-dev` when composer is
+on `PATH`, and recreates the writable upload and Dompdf directories.
+
+Two things to set up once, by hand:
+
+1. **Document root.** Point the domain at
+   `/home/olympicd/olympicday.in/app/public`, *not* at the deployment path —
+   otherwise `app/.env`, `app/config/` and `database/` are served to the web.
+2. **`app/.env`.** It is gitignored, so it never reaches the repository and no
+   deploy touches it. Create it once on the server from `app/.env.example`.
+
+No migration step is needed: the `Schema::ensureX()` calls upgrade the database
+on the next request. For a brand-new database, import `database/schema.sql`
+first.
 
 **First sign-in:** `admin@sportsmis.com` / `ChangeMe@123`. The account is
 created automatically on first run even without `seeds.sql`, and the

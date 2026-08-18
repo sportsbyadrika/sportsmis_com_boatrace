@@ -110,6 +110,43 @@ if (is_file($seedFile)) {
     }
 }
 
+// ── Environment sample ──────────────────────────────────────────────────────
+// app/.env.example is what an operator copies to app/.env. If it drifts from
+// what the config actually reads, a deploy silently falls back to defaults —
+// so parse it with the same loop as app/public/index.php and compare the key
+// set against every getenv() the config uses.
+$envSample = APP_ROOT . '/.env.example';
+if (is_file($envSample)) {
+    $parsed = [];
+    foreach (file($envSample, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+        [$k, $v] = array_map('trim', explode('=', $line, 2));
+        $v = trim($v, "\"'");
+        if ($k !== '') $parsed[$k] = $v;
+    }
+    ok('env sample parses to some keys', count($parsed) > 0);
+
+    $used = [];
+    foreach ([CONFIG_ROOT . '/app.php', CONFIG_ROOT . '/database.php', APP_ROOT . '/core/helpers.php'] as $f) {
+        if (!is_file($f)) continue;
+        // \x22 and \x27 are the double and single quote, written as hex so
+        // the pattern carries no quote character of its own.
+        preg_match_all('/getenv\\(\\s*[\\x22\\x27]([A-Z0-9_]+)[\\x22\\x27]\\s*\\)/',
+            (string)file_get_contents($f), $m);
+        foreach ($m[1] as $k) $used[$k] = true;
+    }
+    foreach (array_keys($used) as $key) {
+        ok("env sample documents {$key}", array_key_exists($key, $parsed));
+    }
+    // The chroma default must survive the parser — it starts with '#', which
+    // is also the comment marker, so this is a genuine edge case.
+    if (isset($parsed['DISPLAY_CHROMA_COLOR'])) {
+        ok('chroma default parses as a colour',
+            (bool)preg_match('/^#[0-9a-fA-F]{6}$/', $parsed['DISPLAY_CHROMA_COLOR']));
+    }
+}
+
 // ── PDF pipeline ────────────────────────────────────────────────────────────
 if (!class_exists(\Dompdf\Dompdf::class)) {
     echo "note: Dompdf not installed — skipping PDF checks (run `composer install`).\n";

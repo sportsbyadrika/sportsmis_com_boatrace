@@ -1,0 +1,56 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════
+# cPanel Git™ Version Control — deployment tasks for SportsMIS® Regatta.
+#
+#   Repository path : /home/olympicd/repositories/sportsmis_com_boatrace
+#   Deployment path : /home/olympicd/olympicday.in
+#
+# cPanel runs these tasks with the repository clone as the working directory
+# whenever "Update from Remote" / "Deploy HEAD Commit" is used on a branch
+# that carries this file.
+#
+# ── Before the first deploy ────────────────────────────────────────────────
+#
+#  1. DOCUMENT ROOT. The application's front controller is app/public/index.php,
+#     so the domain must serve /home/olympicd/olympicday.in/app/public — NOT
+#     the deployment path itself. Set that under Domains → olympicday.in →
+#     Document Root. Pointing the domain at the deployment path would expose
+#     app/.env, app/config/ and database/ to the web.
+#
+#  2. app/.env is deliberately NOT deployed (it is gitignored, so it never
+#     reaches the repository). Create it once on the server from
+#     app/.env.example and fill in the real database credentials. It survives
+#     every later deploy because nothing here touches it.
+#
+#  3. The database itself needs no migration step: every controller calls the
+#     Models\Schema::ensureX() it depends on, and each checks INFORMATION_SCHEMA
+#     before running any CREATE or ALTER. Deploying new code is enough.
+#     For a brand-new database, import database/schema.sql first.
+# ═══════════════════════════════════════════════════════════════════════════
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/olympicd/olympicday.in
+
+    # Copy the working tree across. app/.env is not in the repository, so an
+    # existing one on the server is left untouched.
+    - /bin/cp -R . $DEPLOYPATH
+
+    # Strip files that belong to the repository, not to the running site.
+    # A served .git directory would leak the entire source history.
+    - /bin/rm -rf $DEPLOYPATH/.git
+    - /bin/rm -f  $DEPLOYPATH/.cpanel.yml
+    - /bin/rm -f  $DEPLOYPATH/.gitignore
+
+    # Composer vendors Dompdf, used by the printable programme and the
+    # rank-list / heat-sheet PDFs. vendor/ is gitignored, so install it here.
+    # Guarded: if composer isn't on PATH the deploy still succeeds, and the
+    # PDF routes fall back to a clear "run composer install" message while
+    # the browser print views keep working.
+    - /bin/bash -lc "cd $DEPLOYPATH && if command -v composer >/dev/null 2>&1; then composer install --no-dev --optimize-autoloader --no-interaction; else echo 'composer not found on PATH — run composer install in $DEPLOYPATH to enable PDF downloads'; fi"
+
+    # Directories the app writes to: uploaded event and club images, and
+    # Dompdf's font cache / scratch space.
+    - /bin/mkdir -p $DEPLOYPATH/app/public/assets/uploads/events
+    - /bin/mkdir -p $DEPLOYPATH/app/public/assets/uploads/teams
+    - /bin/mkdir -p $DEPLOYPATH/storage/dompdf
+    - /bin/chmod -R 0755 $DEPLOYPATH/app/public/assets/uploads $DEPLOYPATH/storage
