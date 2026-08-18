@@ -137,6 +137,17 @@ $router->get ('/event-admin/registrations',                   'EventAdminTeamCon
 $router->post('/event-admin/registrations/approve-all',       'EventAdminTeamController@approveAll');
 $router->post('/event-admin/registrations/{hash}/decide',     'EventAdminTeamController@decide');
 
+$router->get ('/event-admin/order-of-events',                  'EventAdminRaceController@index');
+$router->post('/event-admin/order-of-events',                  'EventAdminRaceController@store');
+$router->get ('/event-admin/order-of-events/print',            'EventAdminRaceController@programmePrint');
+$router->get ('/event-admin/order-of-events/pdf',              'EventAdminRaceController@programmePdf');
+$router->post('/event-admin/order-of-events/resequence',       'EventAdminRaceController@resequence');
+$router->get ('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceController@entries');
+$router->post('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceController@saveEntries');
+$router->post('/event-admin/order-of-events/{hash}/status',    'EventAdminRaceController@setStatus');
+$router->post('/event-admin/order-of-events/{hash}/delete',    'EventAdminRaceController@destroy');
+$router->post('/event-admin/order-of-events/{hash}',           'EventAdminRaceController@update');
+
 $router->get ('/event-admin/users',                           'EventAdminUserController@index');
 $router->post('/event-admin/users',                           'EventAdminUserController@store');
 $router->post('/event-admin/users/{hash}/update',             'EventAdminUserController@update');
