@@ -154,6 +154,18 @@ $router->post('/event-admin/users/{hash}/update',             'EventAdminUserCon
 $router->post('/event-admin/users/{hash}/reset',              'EventAdminUserController@resetPassword');
 $router->post('/event-admin/users/{hash}/delete',             'EventAdminUserController@destroy');
 
+// ═══════════════════════════════════════════════════════ EVENT USER (race office)
+$router->get ('/event-user/dashboard',                     'EventUserController@dashboard');
+
+$router->get ('/event-user/rounds',                        'EventUserRoundController@index');
+$router->get ('/event-user/rounds/{hash}',                 'EventUserRoundController@show');
+$router->post('/event-user/rounds/{hash}/seed',            'EventUserRoundController@seedLadder');
+$router->post('/event-user/rounds/{hash}/rounds',          'EventUserRoundController@storeRound');
+$router->post('/event-user/rounds/round/{hash}',           'EventUserRoundController@updateRound');
+$router->post('/event-user/rounds/round/{hash}/heats',     'EventUserRoundController@setHeats');
+$router->post('/event-user/rounds/round/{hash}/delete',    'EventUserRoundController@destroyRound');
+$router->post('/event-user/rounds/heat/{hash}',            'EventUserRoundController@updateHeat');
+
 // ═══════════════════════════════════════════════════════ PUBLIC (stub)
 $router->get ('/public',                           'PublicController@index');
 
