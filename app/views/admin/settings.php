@@ -56,8 +56,9 @@
       </ol>
       <hr>
       <p class="small text-muted mb-0">
-        All three sign in on separate pages, and the two event roles need the event&rsquo;s
-        <strong>Event Code</strong> alongside their email.
+        All three use the <strong>same sign-in page</strong> with just an email and password —
+        the workspace follows from the account, so the login screen gives nothing away about
+        the roles behind it.
       </p>
     </div>
   </div>

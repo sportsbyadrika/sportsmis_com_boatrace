@@ -18,9 +18,8 @@
         Organisers and race officials can sign in below.
       </p>
       <div class="d-flex flex-wrap gap-2 justify-content-center">
-        <a href="/event-admin/login" class="btn btn-primary"><i class="bi bi-person-badge me-1"></i>Event Admin</a>
-        <a href="/event-user/login"  class="btn btn-water"><i class="bi bi-people me-1"></i>Event User</a>
-        <a href="/login"             class="btn btn-outline-secondary"><i class="bi bi-shield-lock me-1"></i>Super Admin</a>
+        <a href="/login" class="btn btn-primary"><i class="bi bi-box-arrow-in-right me-1"></i>Sign in</a>
+        <a href="/display" class="btn btn-outline-secondary"><i class="bi bi-tv me-1"></i>Display screens</a>
       </div>
     </div>
   </div>

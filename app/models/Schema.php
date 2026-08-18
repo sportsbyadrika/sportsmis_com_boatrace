@@ -56,7 +56,8 @@ class Schema extends Model
 
     // ── Events (tenants) ─────────────────────────────────────────────────────
 
-    /** events: one row per regatta. `code` is the Event Code used at login. */
+    /** events: one row per regatta. `code` is the Event Code — the tenant's
+     *  public handle, used to open a display screen, not to sign in. */
     public static function ensureEvents(): void
     {
         if (!empty(self::$applied['events'])) return;
@@ -118,9 +119,10 @@ class Schema extends Model
     // ── Per-event logins ─────────────────────────────────────────────────────
 
     /**
-     * event_admins: the account an event administrator signs in with
-     * (Event Code + email + password). Unique per (event_id, email) so the
-     * same person can administer several regattas with one address.
+     * event_admins: the account an event administrator signs in with.
+     * Unique per (event_id, email) so the same person can administer several
+     * regattas with one address — which is why sign-in may have to ask which
+     * one they meant.
      */
     public static function ensureEventAdmins(): void
     {

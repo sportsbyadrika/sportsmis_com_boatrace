@@ -19,20 +19,20 @@ abstract class EventAdminBase extends Controller
         try { Schema::ensureAll(); } catch (\Throwable $e) {}
 
         if (!Auth::eventAdminCheck()) {
-            $this->redirect('/event-admin/login', 'Please sign in to continue.', 'warning');
+            $this->redirect('/login', 'Please sign in to continue.', 'warning');
         }
 
         $session = Auth::eventAdmin();
         $admin   = \Models\EventAdmin::findById((int)$session['id']);
         if (!$admin || $admin['status'] !== 'active') {
             Auth::eventAdminLogout();
-            $this->redirect('/event-admin/login', 'Your account is no longer active.', 'error');
+            $this->redirect('/login', 'Your account is no longer active.', 'error');
         }
 
         $event = Event::findById((int)$admin['event_id']);
         if (!$event) {
             Auth::eventAdminLogout();
-            $this->redirect('/event-admin/login', 'That event no longer exists.', 'error');
+            $this->redirect('/login', 'That event no longer exists.', 'error');
         }
         $event['code'] = $event['code'] ?: ensureEventCode((int)$event['id']);
 

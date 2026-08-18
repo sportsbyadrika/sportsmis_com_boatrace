@@ -1,25 +1,31 @@
-<?php /** Super Admin sign-in. */ ?>
+<?php
+/**
+ * The one sign-in form. Email + password only — the server resolves which
+ * account the credentials belong to, so this page reveals nothing about the
+ * roles behind it.
+ */
+?>
 <div class="mb-4">
-  <h4 class="fw-bold mb-1">Welcome back</h4>
-  <p class="text-muted mb-0">Sign in to the SportsMIS Regatta platform.</p>
+  <h4 class="fw-bold mb-1">Sign in</h4>
+  <p class="text-muted mb-0">Welcome back to SportsMIS Regatta.</p>
 </div>
-
-<?php $activeRole = 'admin'; require APP_ROOT . '/views/partials/role-tabs.php'; ?>
 
 <div class="sms-card p-4">
   <form method="POST" action="/login" novalidate>
     <?= csrf() ?>
+
     <div class="mb-3">
       <label class="form-label" for="email">Email address</label>
       <div class="input-group">
         <span class="input-group-text bg-white"><i class="bi bi-envelope"></i></span>
         <input type="email" class="form-control <?= hasError('email') ?>" id="email" name="email"
-               value="<?= e(old('email')) ?>" placeholder="you@example.com" autocomplete="username" required autofocus>
+               value="<?= e(old('email')) ?>" placeholder="you@example.com"
+               autocomplete="username" required autofocus>
       </div>
       <?= fieldError('email') ?>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-4">
       <label class="form-label" for="password">Password</label>
       <div class="input-group">
         <span class="input-group-text bg-white"><i class="bi bi-lock"></i></span>
@@ -35,6 +41,7 @@
 </div>
 
 <p class="text-muted small text-center mt-3 mb-0">
-  Running an event? Use the <a href="/event-admin/login" class="text-decoration-none">Event Admin</a>
-  or <a href="/event-user/login" class="text-decoration-none">Event User</a> sign-in with your Event Code.
+  Opening a screen at the venue?
+  <a href="/display" class="text-decoration-none">Display screens</a>
+  are opened with the Event Code, not an account.
 </p>

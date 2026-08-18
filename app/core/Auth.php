@@ -10,8 +10,10 @@ namespace Core;
  *   $_SESSION['event_admin']  -> per-event administrator — event_admins table
  *   $_SESSION['event_user']   -> per-event privileged user — event_users table
  *
- * Event admins and event users sign in with an Event Code + email + password;
- * their credentials never touch the main users table. This mirrors the
+ * All three sign in through one form with just an email and password;
+ * AuthController resolves which bucket the credentials open by checking all
+ * three tables, so the login page never advertises the role structure.
+ * Per-event credentials never touch the main users table — this mirrors the
  * SportsMIS `event_staff` bucket.
  */
 class Auth

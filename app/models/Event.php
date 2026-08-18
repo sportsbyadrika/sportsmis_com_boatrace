@@ -5,8 +5,9 @@ use Core\Model;
 
 /**
  * Events are the tenant boundary: every team, race, round, heat, lane and
- * result hangs off one. `code` is the Event Code that event admins and event
- * users type at sign-in, and that the display screens are addressed by.
+ * result hangs off one. `code` is the Event Code — the tenant's public handle.
+ * It identifies the regatta on the programme and the reports and opens a
+ * display screen; it is not a sign-in credential.
  */
 class Event extends Model
 {

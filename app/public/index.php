@@ -84,19 +84,26 @@ session_start();
 $router = new Core\Router();
 
 // ═══════════════════════════════════════════════════════ AUTH
+// One sign-in form for every role; the server resolves which account the
+// credentials belong to. /login/choose appears only when one password opens
+// several accounts, and only after it has been verified.
 $router->get ('/',                     'AuthController@loginForm');
 $router->get ('/login',                'AuthController@loginForm');
 $router->post('/login',                'AuthController@login');
+$router->get ('/login/choose',         'AuthController@chooseForm');
+$router->post('/login/choose',         'AuthController@choose');
 $router->get ('/logout',               'AuthController@logout');
 $router->post('/account/password',     'AuthController@changePassword');
 
-$router->get ('/event-admin/login',    'AuthController@eventAdminLoginForm');
-$router->post('/event-admin/login',    'AuthController@eventAdminLogin');
+// The per-role sign-in pages are gone. Their URLs still resolve, because they
+// were printed on handover notes and bookmarked, but they now just land on
+// the single form.
+$router->get ('/event-admin/login',    'AuthController@loginForm');
+$router->get ('/event-user/login',     'AuthController@loginForm');
+
 $router->get ('/event-admin/logout',   'AuthController@eventAdminLogout');
 $router->post('/event-admin/password', 'AuthController@eventAdminPassword');
 
-$router->get ('/event-user/login',     'AuthController@eventUserLoginForm');
-$router->post('/event-user/login',     'AuthController@eventUserLogin');
 $router->get ('/event-user/logout',    'AuthController@eventUserLogout');
 $router->post('/event-user/password',  'AuthController@eventUserPassword');
 

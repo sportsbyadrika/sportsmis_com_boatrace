@@ -266,9 +266,9 @@ function positionClass(int $pos): string
 }
 
 /**
- * Ensure an event has a short, unique Event Code. Event admins and event
- * users both sign in with it, so it is generated on first use and never
- * changes. Idempotent.
+ * Ensure an event has a short, unique Event Code — the tenant's public
+ * handle, printed on the programme and typed by a venue operator to open a
+ * display screen. Generated on first use and never changes. Idempotent.
  */
 function ensureEventCode(int $eventId): string
 {

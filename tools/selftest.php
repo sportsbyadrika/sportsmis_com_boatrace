@@ -16,7 +16,11 @@ define('CONFIG_ROOT', APP_ROOT . '/config');
 define('PUBLIC_ROOT', APP_ROOT . '/public');
 
 spl_autoload_register(function (string $class) {
-    foreach (['Core\\' => APP_ROOT . '/core/', 'Models\\' => APP_ROOT . '/models/'] as $prefix => $base) {
+    foreach ([
+        'Core\\'        => APP_ROOT . '/core/',
+        'Models\\'      => APP_ROOT . '/models/',
+        'Controllers\\' => APP_ROOT . '/controllers/',
+    ] as $prefix => $base) {
         if (!str_starts_with($class, $prefix)) continue;
         $file = $base . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
         if (file_exists($file)) { require $file; return; }
@@ -145,6 +149,104 @@ if (is_file($envSample)) {
         ok('chroma default parses as a colour',
             (bool)preg_match('/^#[0-9a-fA-F]{6}$/', $parsed['DISPLAY_CHROMA_COLOR']));
     }
+}
+
+// ── Sign-in resolution ──────────────────────────────────────────────────────
+// One /login form resolves the role by checking all three account tables, so
+// the page never advertises the role structure. That resolution is the piece
+// most worth testing: it decides who gets in and as what.
+//
+// Driven against SQLite with a PDO injected into Core\Model. The queries
+// involved are plain portable SQL, so this exercises the LOGIC — it is not a
+// substitute for running the real schema on MySQL.
+if (extension_loaded('pdo_sqlite')) {
+    $pdo = new PDO('sqlite::memory:', null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+    $pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT, password TEXT,
+                                    role TEXT, status TEXT, last_login_at TEXT)');
+    $pdo->exec('CREATE TABLE events (id INTEGER PRIMARY KEY, code TEXT, name TEXT, name_regional TEXT,
+                                     image TEXT, start_date TEXT, end_date TEXT, status TEXT)');
+    $pdo->exec('CREATE TABLE event_admins (id INTEGER PRIMARY KEY, event_id INT, name TEXT, email TEXT,
+                                           password TEXT, status TEXT, last_login_at TEXT)');
+    $pdo->exec('CREATE TABLE event_users (id INTEGER PRIMARY KEY, event_id INT, name TEXT, email TEXT,
+                                          password TEXT, status TEXT, last_login_at TEXT)');
+    $pdo->exec('CREATE TABLE event_user_privileges (id INTEGER PRIMARY KEY, event_user_id INT, privilege TEXT)');
+
+    $hash = fn(string $p) => password_hash($p, PASSWORD_BCRYPT, ['cost' => 4]);   // cheap for tests
+
+    $pdo->exec("INSERT INTO events (id, code, name, status) VALUES
+        (1, 'RGAAA111', 'Alpha Regatta', 'active'),
+        (2, 'RGBBB222', 'Beta Regatta',  'active')");
+
+    $ins = fn(string $sql, array $a) => $pdo->prepare($sql)->execute($a);
+    $ins("INSERT INTO users (name,email,password,role,status) VALUES (?,?,?,?,?)",
+         ['Root', 'root@example.com', $hash('rootpass'), 'super_admin', 'active']);
+    $ins("INSERT INTO users (name,email,password,role,status) VALUES (?,?,?,?,?)",
+         ['Old', 'retired@example.com', $hash('rootpass'), 'super_admin', 'inactive']);
+
+    $ins("INSERT INTO event_admins (event_id,name,email,password,status) VALUES (?,?,?,?,?)",
+         [1, 'Ann', 'ann@example.com', $hash('annpass'), 'active']);
+    // Same address, two regattas, DIFFERENT passwords — only the matching one counts.
+    $ins("INSERT INTO event_admins (event_id,name,email,password,status) VALUES (?,?,?,?,?)",
+         [1, 'Cara', 'cara@example.com', $hash('shared'), 'active']);
+    $ins("INSERT INTO event_admins (event_id,name,email,password,status) VALUES (?,?,?,?,?)",
+         [2, 'Cara', 'cara@example.com', $hash('different'), 'active']);
+    // Disabled account must never appear.
+    $ins("INSERT INTO event_admins (event_id,name,email,password,status) VALUES (?,?,?,?,?)",
+         [2, 'Gone', 'gone@example.com', $hash('gonepass'), 'disabled']);
+
+    $ins("INSERT INTO event_users (event_id,name,email,password,status) VALUES (?,?,?,?,?)",
+         [2, 'Cara', 'cara@example.com', $hash('shared'), 'active']);
+    $pdo->exec("INSERT INTO event_user_privileges (event_user_id, privilege)
+                VALUES (1, 'result_entry'), (1, 'reports')");
+
+    // Inject the connection Core\Model would otherwise open itself.
+    $prop = new ReflectionProperty(\Core\Model::class, 'pdo');
+    $prop->setAccessible(true);
+    $prop->setValue(null, $pdo);
+
+    $resolve = new ReflectionMethod(\Controllers\AuthController::class, 'resolveCandidates');
+    $resolve->setAccessible(true);
+    $auth = new \Controllers\AuthController();
+    $find = fn(string $email, string $password) => $resolve->invoke($auth, $email, $password);
+
+    $kinds = fn(array $c) => implode(',', array_column($c, 'kind'));
+
+    $r = $find('root@example.com', 'rootpass');
+    check('platform account resolves', $kinds($r), 'admin');
+
+    check('wrong password resolves to nothing', $find('root@example.com', 'nope'), []);
+    check('unknown address resolves to nothing', $find('nobody@example.com', 'rootpass'), []);
+    check('inactive platform account is excluded', $find('retired@example.com', 'rootpass'), []);
+    check('disabled event account is excluded', $find('gone@example.com', 'gonepass'), []);
+
+    $r = $find('ann@example.com', 'annpass');
+    check('single event-admin resolves', $kinds($r), 'event_admin');
+    check('candidate carries its event name', $r[0]['title'] ?? '', 'Alpha Regatta');
+
+    // Cara holds three accounts; only the two sharing this password may appear.
+    $r = $find('cara@example.com', 'shared');
+    check('one password opens exactly its own accounts', $kinds($r), 'event_admin,event_user');
+    check('the other regatta is not offered',
+        in_array('Beta Regatta', array_column($r, 'title'), true)
+            && count(array_filter($r, fn($c) => $c['title'] === 'Beta Regatta')) === 1, true);
+
+    $r = $find('cara@example.com', 'different');
+    check('the other password opens only its own account', $kinds($r), 'event_admin');
+    check('and it is the other regatta', $r[0]['title'] ?? '', 'Beta Regatta');
+
+    // Candidates must never carry password material into the session.
+    $leak = [];
+    foreach ($find('cara@example.com', 'shared') as $c) {
+        foreach ($c as $k => $v) {
+            if (is_string($v) && str_starts_with($v, '$2y$')) $leak[] = $k;
+        }
+    }
+    check('no password hash reaches the candidate list', $leak, []);
+
+    $prop->setValue(null, null);   // leave no connection behind
 }
 
 // ── Root .htaccess ──────────────────────────────────────────────────────────

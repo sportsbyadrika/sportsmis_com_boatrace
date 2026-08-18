@@ -6,7 +6,7 @@ use Core\Model;
 /**
  * Per-event administrator logins. Auth is independent of the users table —
  * uniqueness is per (event_id, email), so one address can administer several
- * regattas. Sign-in is Event Code + email + password.
+ * regattas. Sign-in is email + password on the single /login form.
  */
 class EventAdmin extends Model
 {
@@ -70,18 +70,27 @@ class EventAdmin extends Model
     }
 
     /**
-     * Verify Event Code + email + password. Returns the admin row (with the
-     * event's id resolved) or null — callers must not distinguish which of
-     * the three inputs was wrong.
+     * Every ACTIVE admin account sharing this email address, across all
+     * events, hydrated with the event details a sign-in chooser needs.
+     *
+     * Sign-in resolves the role from email + password alone, so the login
+     * page never has to advertise that per-event roles exist. An address can
+     * legitimately hold accounts on several regattas — uniqueness is only per
+     * (event_id, email) — which is why this returns a list.
      */
-    public static function attempt(string $eventCode, string $email, string $password): ?array
+    public static function activeForEmail(string $email): array
     {
-        $event = Event::findByCode($eventCode);
-        if (!$event) return null;
-        $admin = static::findByEventEmail((int)$event['id'], $email);
-        if (!$admin || $admin['status'] !== 'active') return null;
-        if (!password_verify($password, (string)$admin['password'])) return null;
-        static::updateLastLogin((int)$admin['id']);
-        return $admin;
+        $email = strtolower(trim($email));
+        if ($email === '') return [];
+        return static::rows(
+            "SELECT ea.*, e.name AS event_name, e.name_regional AS event_name_regional,
+                    e.code AS event_code, e.status AS event_status,
+                    e.start_date, e.end_date, e.image AS event_image
+               FROM event_admins ea
+               JOIN events e ON e.id = ea.event_id
+              WHERE ea.email = ? AND ea.status = 'active'
+              ORDER BY COALESCE(e.start_date, '9999-12-31') DESC, e.name",
+            [$email]
+        );
     }
 }

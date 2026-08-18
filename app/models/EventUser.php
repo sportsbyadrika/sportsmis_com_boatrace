@@ -96,15 +96,29 @@ class EventUser extends Model
         static::update('event_users', ['last_login_at' => date('Y-m-d H:i:s')], ['id' => $id]);
     }
 
-    /** Event Code + email + password. Returns the row or null. */
-    public static function attempt(string $eventCode, string $email, string $password): ?array
+    /**
+     * Every ACTIVE race-office account sharing this email address, across all
+     * events, hydrated with the event details and the account's privileges.
+     * See EventAdmin::activeForEmail() for why sign-in works this way.
+     */
+    public static function activeForEmail(string $email): array
     {
-        $event = Event::findByCode($eventCode);
-        if (!$event) return null;
-        $user = static::findByEventEmail((int)$event['id'], $email);
-        if (!$user || $user['status'] !== 'active') return null;
-        if (!password_verify($password, (string)$user['password'])) return null;
-        static::updateLastLogin((int)$user['id']);
-        return $user;
+        $email = strtolower(trim($email));
+        if ($email === '') return [];
+        $rows = static::rows(
+            "SELECT eu.*, e.name AS event_name, e.name_regional AS event_name_regional,
+                    e.code AS event_code, e.status AS event_status,
+                    e.start_date, e.end_date, e.image AS event_image
+               FROM event_users eu
+               JOIN events e ON e.id = eu.event_id
+              WHERE eu.email = ? AND eu.status = 'active'
+              ORDER BY COALESCE(e.start_date, '9999-12-31') DESC, e.name",
+            [$email]
+        );
+        foreach ($rows as &$r) {
+            $r['privileges'] = static::privilegesFor((int)$r['id']);
+        }
+        unset($r);
+        return $rows;
     }
 }

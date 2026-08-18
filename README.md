@@ -9,11 +9,22 @@ database.
 
 ## What it does
 
-| Role | Signs in at | Manages |
-|---|---|---|
-| **Super Admin** (platform owner) | `/login` — email + password | Events, one or more Event Admin accounts per event, platform defaults |
-| **Event Admin** (per event) | `/event-admin/login` — **Event Code** + email + password | Event details, teams, registrations, the Order of Events, Event User accounts |
-| **Event User** (per event, privilege-gated) | `/event-user/login` — **Event Code** + email + password | Rounds & heats, lane allocation, result entry, reports, display screens |
+| Role | Manages |
+|---|---|
+| **Super Admin** (platform owner) | Events, one or more Event Admin accounts per event, platform defaults |
+| **Event Admin** (per event) | Event details, teams, registrations, the Order of Events, Event User accounts |
+| **Event User** (per event, privilege-gated) | Rounds & heats, lane allocation, result entry, reports, display screens |
+
+**All three sign in at `/login`** with just an email and password. The server
+checks all three account tables and opens whichever workspace the credentials
+belong to, so the login page gives nothing away about the roles behind it.
+One address can hold accounts on several regattas — when a password opens more
+than one, a short picker appears, and only after the password has been
+verified.
+
+The **Event Code** is not a credential. It is the regatta's public handle:
+printed on the programme and reports, and typed by a venue operator at
+`/display` to open a screen.
 
 Each role has its own session bucket, so a platform owner can hold an admin
 session and an event portal session at once without one clobbering the other.
