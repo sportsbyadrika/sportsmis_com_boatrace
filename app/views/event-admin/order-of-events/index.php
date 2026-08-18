@@ -129,7 +129,13 @@ $genders  = \Models\EventRace::GENDERS;
                   <?= (int)$r['entry_count'] ?>
                 </a>
               </td>
-              <td class="text-center"><?= (int)$r['round_count'] ?></td>
+              <td class="text-center">
+                <a href="/event-admin/order-of-events/<?= e($h) ?>/schedule"
+                   class="badge <?= (int)$r['round_count'] ? 'bg-primary-subtle text-primary-emphasis' : 'bg-secondary-subtle text-secondary-emphasis' ?> text-decoration-none"
+                   title="Round dates and times">
+                  <?= (int)$r['round_count'] ?>
+                </a>
+              </td>
               <td>
                 <select class="form-select form-select-sm race-status" data-race="<?= e($h) ?>">
                   <?php foreach ($statuses as $key => $label): ?>
@@ -141,6 +147,8 @@ $genders  = \Models\EventRace::GENDERS;
                 <div class="btn-group btn-group-sm">
                   <a class="btn btn-outline-primary" href="/event-admin/order-of-events/<?= e($h) ?>/entries"
                      title="Entries"><i class="bi bi-people"></i></a>
+                  <a class="btn btn-outline-primary" href="/event-admin/order-of-events/<?= e($h) ?>/schedule"
+                     title="Round schedule"><i class="bi bi-clock"></i></a>
                   <button class="btn btn-outline-secondary" data-bs-toggle="modal"
                           data-bs-target="#modalEditRace<?= e($h) ?>" title="Edit"><i class="bi bi-pencil"></i></button>
                   <form method="POST" action="/event-admin/order-of-events/<?= e($h) ?>/delete" class="d-inline">

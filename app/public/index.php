@@ -153,6 +153,9 @@ $router->post('/event-admin/order-of-events',                  'EventAdminRaceCo
 $router->get ('/event-admin/order-of-events/print',            'EventAdminRaceController@programmePrint');
 $router->get ('/event-admin/order-of-events/pdf',              'EventAdminRaceController@programmePdf');
 $router->post('/event-admin/order-of-events/resequence',       'EventAdminRaceController@resequence');
+$router->get ('/event-admin/order-of-events/{hash}/schedule',  'EventAdminRaceController@schedule');
+$router->post('/event-admin/order-of-events/{hash}/schedule',  'EventAdminRaceController@saveSchedule');
+$router->post('/event-admin/order-of-events/{hash}/seed-rounds','EventAdminRaceController@seedRounds');
 $router->get ('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceController@entries');
 $router->post('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceController@saveEntries');
 $router->post('/event-admin/order-of-events/{hash}/entries/{entryHash}/image',        'EventAdminRaceController@entryImage');

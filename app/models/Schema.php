@@ -374,6 +374,17 @@ class Schema extends Model
             ");
         }
 
+        // A round runs at its own time: prelims on the morning of day one,
+        // semis and the final later or on another day. NULL means "inherit
+        // the race's slot", so an event that runs everything in one block
+        // needs no extra data entry.
+        foreach ([
+            'scheduled_date' => "ALTER TABLE rounds ADD COLUMN scheduled_date DATE NULL AFTER qualify_per_heat",
+            'scheduled_time' => "ALTER TABLE rounds ADD COLUMN scheduled_time TIME NULL AFTER scheduled_date",
+        ] as $col => $ddl) {
+            if (!self::columnExists('rounds', $col)) static::query($ddl);
+        }
+
         if (!self::tableExists('heats')) {
             static::query("
                 CREATE TABLE heats (

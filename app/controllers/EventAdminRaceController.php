@@ -2,7 +2,7 @@
 namespace Controllers;
 
 use Core\{Pdf, FileUpload};
-use Models\{EventRace, TeamRegistration, AppSetting};
+use Models\{EventRace, TeamRegistration, AppSetting, Round};
 
 /**
  * Event Admin -> Order of Events (the programme).
@@ -189,6 +189,77 @@ class EventAdminRaceController extends EventAdminBase
         $this->redirect($back, 'Boat photo removed.');
     }
 
+    // ── Round schedule ───────────────────────────────────────────────────────
+    // A race carries one slot; its rounds may each take their own, so the
+    // preliminary heats, the semi-finals and the final can run at different
+    // times or on different days. Blank inherits the race.
+
+    public function schedule(string $hash): void
+    {
+        $this->boot();
+        $race = $this->raceOr404($hash);
+
+        $this->view('event-admin/order-of-events/schedule', [
+            'pageTitle' => 'Schedule — ' . $race['name'],
+            'race'      => $race,
+            'rounds'    => Round::forRace((int)$race['id']),
+        ]);
+    }
+
+    public function saveSchedule(string $hash): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+        $race = $this->raceOr404($hash);
+        $back = '/event-admin/order-of-events/' . hid_race((int)$race['id']) . '/schedule';
+
+        $dates = (array)($_POST['date'] ?? []);
+        $times = (array)($_POST['time'] ?? []);
+
+        // The form posts hashed round ids; resolve them back before writing.
+        $schedules = [];
+        foreach ($dates as $roundHash => $date) {
+            $id = hid_round_decode((string)$roundHash);
+            if ($id <= 0) continue;
+            $schedules[$id] = ['date' => (string)$date, 'time' => (string)($times[$roundHash] ?? '')];
+        }
+
+        Round::updateSchedules((int)$race['id'], $schedules);
+        $this->redirect($back, 'Round schedule saved.');
+    }
+
+    /**
+     * Create the standard ladder from the programme side, so an administrator
+     * can lay out and time a race before the race office opens it. Lane counts
+     * and heats stay the race office's business.
+     */
+    public function seedRounds(string $hash): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+        $race = $this->raceOr404($hash);
+        $back = '/event-admin/order-of-events/' . hid_race((int)$race['id']) . '/schedule';
+
+        if (Round::countForRace((int)$race['id']) > 0) {
+            $this->redirect($back, 'This race already has rounds.', 'error');
+        }
+
+        $order = 1;
+        foreach (Round::DEFAULT_LADDER as $spec) {
+            Round::create([
+                'event_id'         => $this->eventId(),
+                'event_race_id'    => (int)$race['id'],
+                'name'             => $spec['name'],
+                'round_type'       => $spec['round_type'],
+                'sort_order'       => $order++,
+                'lane_count'       => (int)$race['lane_count'],
+                'qualify_per_heat' => $spec['qualify_per_heat'],
+                'status'           => 'draft',
+            ]);
+        }
+        $this->redirect($back, 'Rounds created — give each one its date and time below.');
+    }
+
     // ── Printable programme ──────────────────────────────────────────────────
 
     /** Browser print view (A4). ?date=YYYY-MM-DD for one day, else all. */
@@ -232,6 +303,8 @@ class EventAdminRaceController extends EventAdminBase
     {
         $groups = [];
         foreach (EventRace::forEvent($this->eventId(), $date) as $race) {
+            // Printed under the race when its rounds run at their own times.
+            $race['round_schedule'] = Round::scheduleSummary((int)$race['id'], $race);
             $key = (string)($race['race_date'] ?? '');
             $groups[$key][] = $race;
         }

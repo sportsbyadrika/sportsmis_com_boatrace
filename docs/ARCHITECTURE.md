@@ -124,6 +124,36 @@ is no longer wanted, insert what is new, leave the rest untouched — and
 `tools/selftest.php` pins that down: reverting to delete-and-reinsert fails
 three checks.
 
+### Scheduling cascades: race → round → heat
+
+A regatta is scheduled at three levels, and each level below the race is
+optional:
+
+| Level | Column | Blank means |
+|---|---|---|
+| `event_races` | `race_date`, `race_time` | unscheduled |
+| `rounds` | `scheduled_date`, `scheduled_time` | inherit the race |
+| `heats` | `scheduled_date`, `scheduled_time` | inherit the round |
+
+This is what lets preliminary heats, semi-finals and the final run at
+different times or on different days without duplicating a schedule onto
+every heat. `effectiveSchedule()` resolves it, and **date and time inherit
+independently** — semis later the same day need only a time.
+
+Two rules that are easy to get wrong and are therefore pinned by
+`tools/selftest.php`:
+
+- A heat inherits its **round**, not the race. Skipping the middle level
+  silently strands every heat of a round that moved to another day.
+- `'0000-00-00'` and `'00:00:00'` count as *not set*. Treating a zero date as
+  a real override would let a placeholder beat a genuine date from above.
+
+The Event Admin sets round slots from **Order of Events → Schedule** (and may
+seed the standard ladder there, so a race can be timed before the race office
+opens it); the race office can override per round or per heat under **Rounds &
+Heats**. The printed programme shows a round summary under each race, and
+prints nothing extra for a race that runs straight through.
+
 ### Rounds own the lane count ⚠
 
 `lane_count` lives on `rounds`, not on the event or the race, because a final

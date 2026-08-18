@@ -198,6 +198,8 @@ CREATE TABLE IF NOT EXISTS rounds (
     sort_order       TINYINT UNSIGNED NOT NULL DEFAULT 1,
     lane_count       TINYINT UNSIGNED NOT NULL DEFAULT 6,
     qualify_per_heat TINYINT UNSIGNED NOT NULL DEFAULT 2,
+    scheduled_date   DATE NULL COMMENT 'NULL inherits the race date',
+    scheduled_time   TIME NULL COMMENT 'NULL inherits the race time',
     status           ENUM('draft','open','locked','published') NOT NULL DEFAULT 'draft',
     published_at     DATETIME NULL,
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

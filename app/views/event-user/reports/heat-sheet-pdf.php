@@ -7,7 +7,7 @@ $lanes = (int)$round['lane_count'];
 
 <h2><?= (int)$round['race_sl_no'] ?>. <?= $h($round['race_name']) ?> &mdash; <?= $h($round['name']) ?></h2>
 <div class="mut" style="margin-bottom:10px">
-  <?= $h(formatDateTime($round['race_date'], $round['race_time'])) ?>
+  <?= $h(scheduleLabel(roundSchedule($round))) ?>
   &middot; <?= $lanes ?> lanes
   &middot; <?= $h(\Models\Round::STATUSES[$round['status']] ?? $round['status']) ?>
 </div>
@@ -16,8 +16,9 @@ $lanes = (int)$round['lane_count'];
   <p class="mut">This round has no heats.</p>
 <?php else: foreach ($heats as $ht): ?>
   <h3><?= $h(\Models\Heat::label($ht)) ?>
-    <?php if ($ht['scheduled_date'] || $ht['scheduled_time']): ?>
-      <span class="mut">— <?= $h(formatDateTime($ht['scheduled_date'], $ht['scheduled_time'])) ?></span>
+    <?php $hs = heatSchedule($ht, $round); ?>
+    <?php if ($hs['date'] !== '' || $hs['time'] !== ''): ?>
+      <span class="mut">— <?= $h(scheduleLabel($hs)) ?></span>
     <?php endif; ?>
   </h3>
   <table class="grid">

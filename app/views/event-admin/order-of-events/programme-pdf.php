@@ -79,6 +79,9 @@ $first = true;
             <td>
               <span class="b"><?= $h($r['name']) ?></span>
               <?php if (!empty($r['name_regional'])): ?><div class="mut"><?= $h($r['name_regional']) ?></div><?php endif; ?>
+              <?php if (!empty($r['round_schedule'])): ?>
+                <div style="font-size:7.5pt">Rounds: <?= $h($r['round_schedule']) ?></div>
+              <?php endif; ?>
             </td>
             <td><?= $h($r['boat_class'] ?: '—') ?></td>
             <td class="c"><?= $h($genders[$r['gender']] ?? $r['gender']) ?></td>
