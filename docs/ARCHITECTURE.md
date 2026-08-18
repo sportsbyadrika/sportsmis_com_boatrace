@@ -33,6 +33,33 @@ debugging an event portal doesn't lose their admin session. Per-event
 credentials never touch `users`; uniqueness is per `(event_id, email)`, so one
 person can hold accounts on several regattas with one address.
 
+### The event admin can stand in for the race office
+
+An Event Admin owns their event outright — its teams, programme, and the
+accounts that run it — so there is nothing to escalate by letting them into
+the race office. Without it, publishing one result or putting the LED wall up
+means creating a throwaway Event User account, which is how those proliferate.
+
+**Race Office** in the admin nav (or the panel on their dashboard) opens
+`$_SESSION['event_user']` with `via_admin => true`, `id => 0` and every
+privilege. Three things keep that honest:
+
+- **The flag is never trusted.** `EventUserBase::bootAsAdmin()` re-reads the
+  administrator's own session and account on *every* request, and checks the
+  account is still active and still belongs to that event. The access dies the
+  moment the administrator session does; it cannot be replayed.
+- **It is visible.** A standing banner says whose access it is, the avatar
+  menu reads "Event Admin — in the race office", and the only way out is
+  labelled *Back to Event Admin* rather than Logout — because signing out is
+  not what leaving does.
+- **`?to=` cannot leave the site.** The landing page comes from a whitelist of
+  `/event-user/…` paths, never from the query string. `tools/selftest.php`
+  asserts every entry stays inside the race office, so an open redirect
+  cannot be introduced by adding a row.
+
+A stand-in has no event-user password, so the change-password modal is not
+rendered for one and the endpoint refuses it.
+
 ### One sign-in form
 
 There is a single `/login` taking email + password.

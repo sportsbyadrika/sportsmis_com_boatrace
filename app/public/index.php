@@ -133,6 +133,9 @@ $router->get ('/event-admin/details',                         'EventAdminControl
 $router->post('/event-admin/details/{panel}/save',            'EventAdminController@saveSection');
 $router->post('/event-admin/details/image',                   'EventAdminController@saveImage');
 
+$router->get ('/event-admin/race-office',                      'EventAdminController@openRaceOffice');
+$router->get ('/event-admin/race-office/exit',                'EventAdminController@exitRaceOffice');
+
 $router->get ('/event-admin/teams',                           'EventAdminTeamController@index');
 $router->get ('/event-admin/teams/import',                    'EventAdminTeamController@importForm');
 $router->get ('/event-admin/teams/import/template',           'EventAdminTeamController@importTemplate');

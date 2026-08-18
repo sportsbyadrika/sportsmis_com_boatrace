@@ -415,6 +415,57 @@ check('and its label says so', scheduleLabel($s4), '—');
 check('a resolved slot formats as date and time',
     scheduleLabel($s2), '09 Aug 2026 · 10:15 AM');
 
+// ── Event admin standing in for the race office ─────────────────────────────
+// The administrator owns the event, so they hold every privilege while they
+// are in the race office. The bucket is marked via_admin and carries no
+// account id, because no event_users row exists behind it.
+$admin = ['id' => 9, 'name' => 'Ann Admin', 'email' => 'ann@example.com',
+          'event_id' => 4, 'password' => '$2y$12$notarealhash', 'status' => 'active'];
+
+\Core\Auth::eventUserLoginAsAdmin($admin, array_keys(\Models\EventUser::PRIVILEGES));
+check('the race-office bucket opens',        \Core\Auth::eventUserCheck(), true);
+check('and is marked as a stand-in',         \Core\Auth::eventUserViaAdmin(), true);
+check('it carries no event-user account id', \Core\Auth::eventUser()['id'], 0);
+check('it is scoped to the administrator\'s event', \Core\Auth::eventUser()['event_id'], 4);
+check('the stand-in holds every privilege',
+    \Core\Auth::eventUser()['privileges'], array_keys(\Models\EventUser::PRIVILEGES));
+foreach (array_keys(\Models\EventUser::PRIVILEGES) as $priv) {
+    ok("stand-in can {$priv}", \Core\Auth::eventUserCan($priv));
+}
+
+// Nothing from the account row may leak into the session.
+$leaked = [];
+foreach (\Core\Auth::eventUser() as $k => $v) {
+    if (is_string($v) && str_starts_with($v, '$2y$')) $leaked[] = $k;
+}
+check('no password material reaches the bucket', $leaked, []);
+
+// Leaving restores the plain state.
+\Core\Auth::eventUserLogout();
+check('leaving closes the race-office bucket', \Core\Auth::eventUserCheck(), false);
+check('and clears the stand-in flag',          \Core\Auth::eventUserViaAdmin(), false);
+
+// A real event-user session must never read as a stand-in.
+\Core\Auth::eventUserLogin(
+    ['id' => 12, 'name' => 'Ravi', 'email' => 'ravi@example.com', 'event_id' => 4],
+    ['reports']
+);
+check('a genuine event user is not a stand-in', \Core\Auth::eventUserViaAdmin(), false);
+check('and keeps only its own privileges', \Core\Auth::eventUser()['privileges'], ['reports']);
+ok('and cannot do what it was not granted', !\Core\Auth::eventUserCan('result_entry'));
+\Core\Auth::eventUserLogout();
+
+// ?to= picks the landing page, so the whitelist must never allow a redirect
+// off this site — an open redirect is exactly how that goes wrong.
+$pages = new ReflectionClassConstant(\Controllers\EventAdminController::class, 'RACE_OFFICE_PAGES');
+$destinations = $pages->getValue();
+ok('the landing whitelist is not empty', $destinations !== []);
+foreach ($destinations as $key => $path) {
+    ok("landing '{$key}' stays inside the race office",
+        is_string($path) && str_starts_with($path, '/event-user/') && !str_contains($path, '//'));
+}
+ok('the default landing page exists', isset($destinations['dashboard']));
+
 // ── Choosing which rounds a race runs ───────────────────────────────────────
 // Not every race has the full ladder: many are preliminary heats plus a
 // final, some are a final alone. Rounds are ticked individually, and must end

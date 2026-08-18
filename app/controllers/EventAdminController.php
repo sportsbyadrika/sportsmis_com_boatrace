@@ -2,6 +2,7 @@
 namespace Controllers;
 
 use Core\FileUpload;
+use Core\Auth;
 use Models\{Event, EventUser, TeamRegistration, EventRace};
 
 /**
@@ -88,6 +89,44 @@ class EventAdminController extends EventAdminBase
         }
         Event::updateById($this->eventId(), ['image' => $url]);
         $this->redirect('/event-admin/details', 'Event image updated.');
+    }
+
+    // ── Race office stand-in ─────────────────────────────────────────────────
+
+    /** Where an administrator may land when opening the race office. */
+    private const RACE_OFFICE_PAGES = [
+        'dashboard'       => '/event-user/dashboard',
+        'rounds'          => '/event-user/rounds',
+        'lane-allocation' => '/event-user/lane-allocation',
+        'results'         => '/event-user/results',
+        'reports'         => '/event-user/reports',
+        'displays'        => '/event-user/displays',
+    ];
+
+    /**
+     * Open the race office as this event's administrator.
+     *
+     * The administrator already owns the event — its teams, programme and the
+     * accounts that run it — so there is nothing to escalate by letting them
+     * in. It saves creating a throwaway event-user account just to publish a
+     * result or put the LED wall up, which is how those accounts proliferate.
+     */
+    public function openRaceOffice(): void
+    {
+        $this->boot();
+
+        Auth::eventUserLoginAsAdmin($this->admin, array_keys(EventUser::PRIVILEGES));
+
+        $to = (string)($_GET['to'] ?? 'dashboard');
+        $this->redirect(self::RACE_OFFICE_PAGES[$to] ?? self::RACE_OFFICE_PAGES['dashboard']);
+    }
+
+    /** Leave the race office; the administrator session is untouched. */
+    public function exitRaceOffice(): void
+    {
+        $this->boot();
+        Auth::eventUserLogout();
+        $this->redirect('/event-admin/dashboard', 'Left the race office.');
     }
 
     /** Per-field normalisation, keeping the stored values well-formed. */
