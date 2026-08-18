@@ -1,0 +1,32 @@
+Options -Indexes
+RewriteEngine On
+
+# Serve existing files/directories directly
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Route everything else through index.php
+RewriteRule ^ index.php [L,QSA]
+
+# Security headers
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+</IfModule>
+
+# Never serve sensitive files
+<FilesMatch "\.(env|sql|log|md)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^\.user\.ini$">
+    Require all denied
+</FilesMatch>
+
+# Match the app's 7 MB per-file cap under mod_php. PHP-FPM/CGI use .user.ini.
+<IfModule mod_php.c>
+    php_value upload_max_filesize 8M
+    php_value post_max_size 32M
+    php_value max_file_uploads 20
+</IfModule>
