@@ -46,12 +46,15 @@ deployment:
     - /bin/rm -f  $DEPLOYPATH/.cpanel.yml
     - /bin/rm -f  $DEPLOYPATH/.gitignore
 
-    # Composer vendors Dompdf, used by the printable programme and the
-    # rank-list / heat-sheet PDFs. vendor/ is gitignored, so install it here.
-    # Guarded: if composer isn't on PATH the deploy still succeeds, and the
-    # PDF routes fall back to a clear "run composer install" message while
-    # the browser print views keep working.
-    - /bin/bash -lc "cd $DEPLOYPATH && if command -v composer >/dev/null 2>&1; then composer install --no-dev --optimize-autoloader --no-interaction; else echo 'composer not found on PATH — run composer install in $DEPLOYPATH to enable PDF downloads'; fi"
+    # Dompdf (the printable programme and the rank-list / heat-sheet PDFs)
+    # ships inside the repository under vendor/, so a deploy needs no composer
+    # on the server at all — a deployment shell on shared hosting usually has
+    # none on its PATH, which is what previously left the PDF routes dead.
+    #
+    # This step is therefore only a safety net for a checkout that somehow
+    # arrives without vendor/. It looks in cPanel's own location as well as the
+    # PATH, and stays silent when there is nothing to do.
+    - /bin/bash -lc 'cd $DEPLOYPATH && if [ -f vendor/autoload.php ]; then echo "vendor/ present — skipping composer"; else COMPOSER=$(command -v composer || echo /opt/cpanel/composer/bin/composer); if [ -x "$COMPOSER" ]; then "$COMPOSER" install --no-dev --optimize-autoloader --no-interaction --prefer-dist; else echo "WARNING: vendor/ is missing and composer was not found — PDF downloads will be unavailable"; fi; fi'
 
     # Directories the app writes to: uploaded event and club images, and
     # Dompdf's font cache / scratch space.

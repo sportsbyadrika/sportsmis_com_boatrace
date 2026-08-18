@@ -54,15 +54,29 @@ class Pdf
                                   bool $pageNumbers = false): void
     {
         if (!class_exists(Dompdf::class)) {
-            // Composer dependencies aren't installed — fail loudly but
-            // usefully rather than with a blank 500.
+            // vendor/ ships inside the repository, so reaching here means the
+            // deployment is incomplete rather than that a step was skipped.
+            // Say where to look instead of prescribing a command that may not
+            // be runnable on the host.
             while (ob_get_level() > 0) { ob_end_clean(); }
             http_response_code(500);
+            $expected = dirname(APP_ROOT) . '/vendor/autoload.php';
             echo '<!doctype html><meta charset="utf-8">'
-               . '<div style="font-family:Inter,system-ui,sans-serif;max-width:620px;margin:60px auto">'
-               . '<h2>PDF renderer unavailable</h2>'
-               . '<p>Dompdf is not installed. Run <code>composer install</code> on the server, '
-               . 'or use the printable view and “Save as PDF” from your browser.</p></div>';
+               . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+               . '<div style="font-family:Inter,system-ui,sans-serif;max-width:640px;margin:60px auto;'
+               . 'padding:28px;border:1px solid #e5e7eb;border-radius:14px">'
+               . '<h2 style="margin-top:0;color:#b91c1c">PDF renderer unavailable</h2>'
+               . '<p>The PDF library did not reach the server. It is part of the repository, so this '
+               . 'usually means the last deployment did not copy everything across.</p>'
+               . '<p style="font-size:.9em;color:#475569">Expected to find:<br><code>'
+               . htmlspecialchars($expected, ENT_QUOTES) . '</code></p>'
+               . '<p><strong>Deploy again</strong> to restore it. In the meantime the '
+               . '<strong>Print</strong> button on the same screen still works — use your browser\'s '
+               . 'print dialog and choose “Save as PDF”.</p>'
+               . '<p style="margin-top:20px"><a href="javascript:history.back()" '
+               . 'style="display:inline-block;padding:8px 16px;background:#0b1f3a;color:#fff;'
+               . 'border-radius:8px;text-decoration:none">&larr; Go back</a></p>'
+               . '</div>';
             exit;
         }
         $pdf = self::render($html, $paper, $orientation, $pageNumbers);

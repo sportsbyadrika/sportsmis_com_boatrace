@@ -72,7 +72,11 @@ Deliberately the same as SportsMIS, with no framework:
 - **Frontend** — Bootstrap 5.3.3 + Bootstrap Icons 1.11.3 (CDN), Inter, and the SportsMIS `sms-*` component classes in `/assets/css/app.css`
 - **PDFs** — Dompdf behind `Core\Pdf::stream()`, plus a `print` layout for browser "Save as PDF"
 
-Only one Composer dependency: `dompdf/dompdf`.
+Only one Composer dependency: `dompdf/dompdf` — and **`vendor/` is committed**,
+so a deploy needs no composer on the server. Shared hosting routinely has none
+on the deployment shell's PATH, which would otherwise leave the PDF reports
+dead. Regenerate it with `./tools/vendor-refresh.sh` (never by hand) and commit
+`vendor/` and `composer.lock` together.
 
 ---
 
@@ -80,7 +84,6 @@ Only one Composer dependency: `dompdf/dompdf`.
 
 ```bash
 git clone <this repo> && cd sportsmis_com_boatrace
-composer install                        # vendors Dompdf
 
 cp app/.env.example app/.env            # then fill in APP_SECRET and the DB_* values
 mysql -u USER -p -e "CREATE DATABASE sportsmis_regatta CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
@@ -113,8 +116,9 @@ The `app/public/assets/uploads/` tree and `storage/dompdf/` must be writable.
 | Site | `https://boatrace.olympicday.in` |
 
 Each deploy copies the working tree across, strips `.git`, `.cpanel.yml` and
-`.gitignore` from the target, runs `composer install --no-dev` when composer is
-on `PATH`, and recreates the writable upload and Dompdf directories.
+`.gitignore` from the target, and recreates the writable upload and Dompdf
+directories. It does **not** need composer — `vendor/` travels with the code —
+and only falls back to running it if a checkout somehow arrives without one.
 
 Two things to set up once, by hand:
 

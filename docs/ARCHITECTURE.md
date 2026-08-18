@@ -276,7 +276,30 @@ yet" rather than its semi-final places.
   nav, the dashboard cards and the account form. Adding one means adding a
   `requirePrivilege()` call in the new controller and nothing else.
 
-## 7. Known gaps
+## 7. Why vendor/ is committed
+
+Dompdf is the only dependency. It is pure PHP with no build step, and the
+cPanel deployment shell has no composer on its `PATH` — the guarded
+`composer install` in `.cpanel.yml` silently did nothing, and every PDF route
+served "PDF renderer unavailable" while the browser print views kept working.
+
+So `vendor/` ships inside the repository and a deploy needs no composer at
+all. That makes it a build artefact living in git, which is only safe if it is
+regenerated reproducibly: use `./tools/vendor-refresh.sh`, which installs
+`--no-dev --prefer-dist`, strips each package's own `.git`, `.github`, tests
+and docs, re-runs the self-test, and reports the resulting size.
+
+The stripping is not cosmetic. Composer falls back to cloning from source when
+it cannot use dist archives, leaving a `.git` inside every package — ~44 MB of
+a ~56 MB install, and git would treat each one as a submodule. Pruned, the
+tree is ~12 MB across ~660 files, most of it the DejaVu fonts Dompdf needs to
+set regional-language text.
+
+`tools/selftest.php` asserts `vendor/autoload.php` is present, that git
+actually tracks it, and that no package carries a nested `.git` — so this
+cannot silently regress into a dead PDF button again.
+
+## 8. Known gaps
 
 - No email delivery, so credentials must be copied from the flash message.
 - No pagination on the team or programme lists; filtering is client-side,

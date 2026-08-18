@@ -737,8 +737,26 @@ if (is_file($rootHt)) {
 }
 
 // ── PDF pipeline ────────────────────────────────────────────────────────────
+// vendor/ ships with the repository so the PDF routes work without composer
+// on the server. If it ever stops being committed, the reports go dead on the
+// next deploy and nothing else notices — so fail here rather than there.
+$vendorAutoload = $root . '/vendor/autoload.php';
+ok('vendor/autoload.php is present', is_file($vendorAutoload));
+if (is_file($vendorAutoload)) {
+    $tracked = [];
+    exec('git -C ' . escapeshellarg($root) . ' ls-files --error-unmatch vendor/autoload.php 2>/dev/null',
+         $tracked, $lsCode);
+    ok('vendor/ is committed, not just installed locally', $lsCode === 0);
+
+    // Nested .git directories would make git treat each package as a
+    // submodule, and are the bulk of an unpruned install.
+    $nested = [];
+    exec('find ' . escapeshellarg($root . '/vendor') . ' -type d -name .git 2>/dev/null', $nested);
+    ok('no package carries its own .git directory (' . count($nested) . ' found)', $nested === []);
+}
+
 if (!class_exists(\Dompdf\Dompdf::class)) {
-    echo "note: Dompdf not installed — skipping PDF checks (run `composer install`).\n";
+    echo "note: Dompdf not installed — skipping PDF checks (run tools/vendor-refresh.sh).\n";
 } else {
     $event = [
         'id' => 1, 'code' => 'RG1A2B3C', 'name' => 'Nehru Trophy Boat Race 2026',
