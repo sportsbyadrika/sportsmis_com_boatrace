@@ -560,7 +560,7 @@ if (extension_loaded('pdo_sqlite')) {
         (7,1,3,3,1,1),(8,1,3,3,2,2)");
     $pdo->exec("INSERT INTO results (event_id,round_id,heat_id,lane_allocation_id,team_registration_id,
         race_time,position,qualified,outcome) VALUES
-        (1,1,1,1,1,'4:10.000',1,1,'ok'),(1,1,1,2,2,'4:11.000',2,1,'ok'),(1,1,1,3,3,'4:12.000',3,0,'ok'),
+        (1,1,1,1,1,'4:10.000',1,1,'ok'),(1,1,1,2,2,'4:11.000',2,1,'ok'),(1,1,1,3,3,NULL,NULL,0,'dsq'),
         (1,2,2,4,2,'4:05.000',1,0,'ok'),(1,2,2,5,1,'4:06.000',2,0,'ok'),(1,2,2,6,3,'4:07.000',3,0,'ok'),
         (1,3,3,7,1,'3:59.000',1,1,'ok'),(1,3,3,8,2,'4:00.000',2,1,'ok')");
 
@@ -632,6 +632,27 @@ if (extension_loaded('pdo_sqlite')) {
         ok('and shows no results at all',
             !isset($r3['places']) && !isset($r3['qualified']));
 
+        // Every published round, heat by heat — what the public page shows
+        // behind "Heats & rounds". A draft round is not public information.
+        $rounds1 = $r1['rounds'] ?? [];
+        check('a settled race carries its rounds', array_column($rounds1, 'name'),
+            ['Preliminary Heats', 'Final']);
+        check('in ladder order', $rounds1[1]['type'] ?? null, 'final');
+        check('each round carries its heats', count($rounds1[0]['heats'] ?? []), 1);
+
+        $heat1 = $rounds1[0]['heats'][0] ?? ['lanes' => []];
+        check('and every lane in them', count($heat1['lanes']), 3);
+        check('in finishing order, unplaced last', array_column($heat1['lanes'], 'lane'), [1, 2, 3]);
+        check('with the lane a boat rowed in', $heat1['lanes'][0]['lane'] ?? null, 1);
+        check('and its time', $heat1['lanes'][0]['time'] ?? null, '4:10.000');
+        check('who went through is marked', $heat1['lanes'][0]['q'] ?? null, 1);
+        check('and a boat that did not finish says why', $heat1['lanes'][2]['out'] ?? null, 'DSQ');
+        check('a disqualified boat holds no place', $heat1['lanes'][2]['pos'] ?? null, 0);
+
+        check('a part-run race carries only its published round',
+            array_column($r2['rounds'] ?? [], 'name'), ['Preliminary Heats']);
+        check('an unpublished race carries no rounds at all', $r3['rounds'] ?? null, []);
+
         // The tally follows the deciding round only — race 2's heats add nothing.
         $byClub = array_column($payload['tally'], 'points', 'club');
         check('only the settled race scores', $byClub, ['KBC' => 3, 'NBC' => 2, 'VBC' => 1]);
@@ -671,9 +692,14 @@ if (extension_loaded('pdo_sqlite')) {
         // A race is addressable, so a result can be shared as a link and the
         // back button closes the detail view instead of leaving the page.
         ok('a race can be linked to directly',
-            str_contains($page, "location.hash = 'race-'")
+            str_contains($page, "'race-' + sl")
             && str_contains($page, 'hashchange')
             && str_contains($page, 'id="sheet"'));
+
+        // Both views of a race are addressable, so "Heats & rounds" can be
+        // shared as its own link.
+        ok('and its rounds have their own address',
+            str_contains($page, "-rounds") && str_contains($page, 'id="tabRounds"'));
 
         // Cache rules are what keep the origin idle under load.
         $hta = (string)file_get_contents($snapDir . '/.htaccess');

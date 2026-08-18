@@ -359,12 +359,29 @@ a result can be shared as a link, the back button closes the sheet instead of
 leaving the page, and someone arriving on a shared link lands directly on that
 race.
 
+Each card carries a second link, bottom right: **Heats & rounds**. It opens the
+same sheet on a tab listing every *published* round of that race in ladder
+order — each heat, each lane, the boat's lane number, its time, DNS/DNF/DSQ
+where it applies, and a Q against whoever went through. That is how a reader
+gets from "Champakulam won" to "here is the heat it qualified from". Rounds
+still in draft are left out of the payload entirely: an undrawn or unrowed
+round is not public information. The tab is addressable too (`#race-1-rounds`),
+and switching tabs *replaces* the history entry rather than pushing one, so
+Back always closes the sheet instead of stepping between its tabs.
+
 The rows themselves are a badge, a two-line name block and a time, laid out
 with flex. The name block must be a **block-level box**: as inline spans the
 boat and the club ignored `overflow`/`text-overflow`/`white-space` entirely,
 printed on the same line, and ran across the finishing time — the layout bug
 this cost a race day to notice. `tools/ui-test.js` measures the boxes in a real
 browser at three profiles; restoring the inline spans fails it six times.
+
+The search bar had the same shape of fault. `applyFilter()` set `card.hidden`,
+which does nothing here: `.card` carries `display:flex`, and an author
+declaration out-ranks the browser's own `[hidden] { display: none }` rule. The
+filter counted correctly and even printed "No races match" while leaving every
+card on screen. `.card[hidden] { display: none }` fixes it, and the browser
+test now asserts on what is actually *visible*, never on the attribute.
 
 ### What is NOT solved here
 

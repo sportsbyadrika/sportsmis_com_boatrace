@@ -70,21 +70,47 @@ const PAYLOAD = {
         { pos: 2, boat: 'Nadubhagom Chundan', club: 'United Boat Club Kainakary', time: '09:18.240', lane: 1 },
         { pos: 3, boat: 'Veeyapuram Chundan', club: 'Veeyapuram Boat Club', time: '09:21.005', lane: 4 },
         { pos: 4, boat: 'Karuvatta Chundan', club: 'Karuvatta Boat Club', time: '09:24.500', lane: 2 },
-        { pos: 5, boat: 'Payippadan Chundan', club: 'Payippad Boat Club', time: '09:29.910', lane: 5 }] },
+        { pos: 5, boat: 'Payippadan Chundan', club: 'Payippad Boat Club', time: '09:29.910', lane: 5 }],
+      rounds: [
+        { name: 'Preliminary Heats', type: 'preliminary', when: '09 Aug 2026, 10:00 AM', heats: [
+          { no: 1, name: '', when: '09 Aug 2026, 10:00 AM', lanes: [
+            { lane: 3, boat: 'Champakulam Chundan', club: 'Tropical Titans Boat Club Alappuzha', pos: 1, time: '09:31.200', out: '', q: 1 },
+            { lane: 1, boat: 'Nadubhagom Chundan', club: 'United Boat Club Kainakary', pos: 2, time: '09:33.010', out: '', q: 1 },
+            { lane: 2, boat: 'Kainakary Chundan', club: 'Kainakary Boat Club', pos: 0, time: '', out: 'DNF', q: 0 }] },
+          { no: 2, name: '', when: '09 Aug 2026, 10:20 AM', lanes: [
+            { lane: 4, boat: 'Veeyapuram Chundan', club: 'Veeyapuram Boat Club', pos: 1, time: '09:35.400', out: '', q: 1 },
+            { lane: 2, boat: 'Karuvatta Chundan', club: 'Karuvatta Boat Club', pos: 2, time: '09:36.900', out: '', q: 1 },
+            { lane: 5, boat: 'Payippadan Chundan', club: 'Payippad Boat Club', pos: 3, time: '09:40.150', out: '', q: 1 }] }] },
+        { name: 'Final', type: 'final', when: '09 Aug 2026, 04:30 PM', heats: [
+          { no: 1, name: '', when: '09 Aug 2026, 04:30 PM', lanes: [
+            { lane: 3, boat: 'Champakulam Chundan', club: 'Tropical Titans Boat Club Alappuzha', pos: 1, time: '09:15.867', out: '', q: 0 },
+            { lane: 1, boat: 'Nadubhagom Chundan', club: 'United Boat Club Kainakary', pos: 2, time: '09:18.240', out: '', q: 0 },
+            { lane: 4, boat: 'Veeyapuram Chundan', club: 'Veeyapuram Boat Club', pos: 3, time: '09:21.005', out: '', q: 0 },
+            { lane: 2, boat: 'Karuvatta Chundan', club: 'Karuvatta Boat Club', pos: 4, time: '09:24.500', out: '', q: 0 },
+            { lane: 5, boat: 'Payippadan Chundan', club: 'Payippad Boat Club', pos: 5, time: '09:29.910', out: '', q: 0 }] }] }] },
     { sl: 2, name: 'Iruttukuthy Vallam', regional: '', class: 'Iruttukuthy', gender: 'Men',
       distance: '1370 m', when: '09 Aug 2026, 03:00 PM', image: '',
       state: 'round', label: 'Round Result', round: 'Semi Final', qualified: [
         { pos: 1, boat: 'St. George Iruttukuthy', club: 'Nadubhagam Boat Club', time: '05:02.100', heat: 1 },
         { pos: 2, boat: 'Kavalam Iruttukuthy', club: 'Kavalam Boat Club', time: '05:04.660', heat: 1 },
         { pos: 1, boat: 'Thekkanattu Iruttukuthy', club: 'Thekkanattu Club', time: '05:03.220', heat: 2 },
-        { pos: 2, boat: 'Chambakulam Iruttukuthy', club: 'Chambakulam Boat Club', time: '05:06.900', heat: 2 }] },
+        { pos: 2, boat: 'Chambakulam Iruttukuthy', club: 'Chambakulam Boat Club', time: '05:06.900', heat: 2 }],
+      rounds: [
+        { name: 'Semi Final', type: 'semi_final', when: '09 Aug 2026, 03:00 PM', heats: [
+          { no: 1, name: '', when: '09 Aug 2026, 03:00 PM', lanes: [
+            { lane: 1, boat: 'St. George Iruttukuthy', club: 'Nadubhagam Boat Club', pos: 1, time: '05:02.100', out: '', q: 1 },
+            { lane: 2, boat: 'Kavalam Iruttukuthy', club: 'Kavalam Boat Club', pos: 2, time: '05:04.660', out: '', q: 1 }] },
+          { no: 2, name: '', when: '09 Aug 2026, 03:20 PM', lanes: [
+            { lane: 1, boat: 'Thekkanattu Iruttukuthy', club: 'Thekkanattu Club', pos: 1, time: '05:03.220', out: '', q: 1 },
+            { lane: 3, boat: 'Chambakulam Iruttukuthy', club: 'Chambakulam Boat Club', pos: 2, time: '05:06.900', out: '', q: 1 }] }] }] },
     { sl: 3, name: 'Veppu Vallam', regional: '', class: 'Veppu', gender: 'Women',
       distance: '1000 m', when: '09 Aug 2026, 02:00 PM', image: '',
       state: 'none', label: 'Not Published', teams: [
         { boat: 'Mannar Veppu', club: 'Mannar Boat Club', code: 'MNR', image: '' },
         { boat: 'Pallathuruthy Veppu', club: 'Pallathuruthy Boat Club Alappuzha', code: 'PLT', image: '' },
         { boat: 'Kumarakom Veppu', club: 'Kumarakom Boat Club', code: 'KMK', image: '' },
-        { boat: 'Neerettupuram Veppu', club: 'Neerettupuram Boat Club', code: 'NRT', image: '' }] }],
+        { boat: 'Neerettupuram Veppu', club: 'Neerettupuram Boat Club', code: 'NRT', image: '' }],
+      rounds: [] }],
   tally: [{ club: 'Tropical Titans Boat Club Alappuzha', gold: 1, silver: 0, bronze: 0, points: 3 },
           { club: 'United Boat Club Kainakary', gold: 0, silver: 1, bronze: 0, points: 2 }]
 };
@@ -109,6 +135,9 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'text/plain' });
   res.end(fs.readFileSync(file));
 });
+
+// Lane and heat labels carry a non-breaking space so they never wrap.
+const flat = s => s.replace(/\u00a0/g, ' ');
 
 const fails = [];
 function t(name, cond, extra) {
@@ -175,6 +204,37 @@ const PROFILES = [
     t(label + ': the card previews the top three only',
       (await page.$$('.card[data-sl="1"] ol.places li')).length === 3);
 
+    // ── Search and filter ─────────────────────────────────────────────────
+    // A hidden card must actually disappear. .card carries display:flex, which
+    // out-ranks the browser's own [hidden] rule unless we say otherwise.
+    const visible = () => page.$$eval('.card', cards =>
+      cards.filter(c => c.getBoundingClientRect().height > 0).map(c => c.dataset.sl));
+
+    await page.fill('#q', 'kavalam');           // a club, in race 2 only
+    t(label + ': searching a club shows only that race',
+      JSON.stringify(await visible()) === '["2"]', JSON.stringify(await visible()));
+    await page.fill('#q', 'chundan');           // a race name and a boat class
+    t(label + ': searching a race name narrows the grid',
+      JSON.stringify(await visible()) === '["1"]', JSON.stringify(await visible()));
+    await page.fill('#q', 'Champakulam');       // a boat, mixed case
+    t(label + ': search ignores case', JSON.stringify(await visible()) === '["1"]',
+      JSON.stringify(await visible()));
+    await page.fill('#q', 'zzz');
+    t(label + ': a search with no match hides every card', (await visible()).length === 0);
+    t(label + ': and says so', (await page.$('.empty.filtered')) !== null);
+    await page.fill('#q', '');
+    t(label + ': clearing the search brings them all back', (await visible()).length === 3);
+    t(label + ': and takes the no-match message away', (await page.$('.empty.filtered')) === null);
+
+    await page.selectOption('#st', 'none');
+    t(label + ': the state filter narrows to unpublished races',
+      JSON.stringify(await visible()) === '["3"]', JSON.stringify(await visible()));
+    await page.fill('#q', 'chundan');
+    t(label + ': search and filter apply together', (await visible()).length === 0);
+    await page.selectOption('#st', '');
+    await page.fill('#q', '');
+    t(label + ': resetting both restores the grid', (await visible()).length === 3);
+
     if (shotDir) {
       fs.mkdirSync(shotDir, { recursive: true });
       await page.screenshot({ path: path.join(shotDir, label + '-grid.png'), fullPage: true });
@@ -186,7 +246,7 @@ const PROFILES = [
     t(label + ': opening a race deep-links it', page.url().endsWith('#race-1'), page.url());
     t(label + ': the detail view holds every placing', (await page.$$('#shBody ol.places li')).length === 5);
     t(label + ': it names the race', (await page.textContent('#shTitle')) === 'Chundan Vallam');
-    t(label + ': it adds the lane', (await page.textContent('#shBody')).includes('Lane 3'));
+    t(label + ': it adds the lane', flat(await page.textContent('#shBody')).includes('Lane 3'));
     t(label + ': its rows do not overlap either',
       (await page.$$eval('#shBody ol.places li', lis => lis.map(li => {
         const w = li.querySelector('.who').getBoundingClientRect(), tm = li.querySelector('.time');
@@ -198,9 +258,40 @@ const PROFILES = [
     }));
     if (shotDir) await page.screenshot({ path: path.join(shotDir, label + '-detail.png') });
 
+    // ── Every published round, heat by heat ───────────────────────────────
+    t(label + ': a race with rounds offers them on the card',
+      (await page.$$('.card[data-sl="1"] .more.rounds')).length === 1);
+    t(label + ': a race with none does not',
+      (await page.$$('.card[data-sl="3"] .more.rounds')).length === 0);
+
+    await page.click('#tabRounds');
+    t(label + ': the rounds tab is addressable', page.url().endsWith('#race-1-rounds'), page.url());
+    const roundsText = flat(await page.textContent('#shBody'));
+    t(label + ': it lists every published round',
+      roundsText.includes('Preliminary Heats') && roundsText.includes('Final'));
+    t(label + ': it names each heat of a multi-heat round',
+      roundsText.includes('Heat 1') && roundsText.includes('Heat 2'));
+    t(label + ': it does not label a single-heat round', !roundsText.includes('Heat 3'));
+    t(label + ': it shows the lane each boat rowed in', roundsText.includes('Lane 3'));
+    t(label + ': it shows a boat that did not finish', roundsText.includes('DNF'));
+    t(label + ': it marks who qualified', (await page.$$('#shBody .qq')).length === 5);
+    t(label + ': every lane of every heat is listed',
+      (await page.$$('#shBody ol.places li')).length === 11);
+    t(label + ': the rounds rows do not overlap either',
+      (await page.$$eval('#shBody ol.places li', lis => lis.map(li => {
+        const w = li.querySelector('.who').getBoundingClientRect(), tm = li.querySelector('.time');
+        return tm ? Math.max(0, w.right - tm.getBoundingClientRect().left) : 0;
+      }))).every(v => v <= 0.5));
+    if (shotDir) await page.screenshot({ path: path.join(shotDir, label + '-rounds.png') });
+
+    await page.click('#tabResult');
+    t(label + ': switching back returns to the result',
+      page.url().endsWith('#race-1') && (await page.$$('#shBody ol.places li')).length === 5, page.url());
+
     await page.goBack();
     await page.waitForTimeout(150);
-    t(label + ': back closes it', (await page.$('#sheet[open]')) === null);
+    t(label + ': back closes it — tabs never stack up history',
+      (await page.$('#sheet[open]')) === null);
     t(label + ': and takes the race out of the address bar', !page.url().includes('#race-'), page.url());
 
     await page.click('.card[data-sl="3"]');
@@ -210,6 +301,17 @@ const PROFILES = [
     await page.waitForTimeout(200);
     t(label + ': escape closes it', (await page.$('#sheet[open]')) === null);
     t(label + ': escape clears the hash too', !page.url().includes('#race-'), page.url());
+
+    // The second card link opens straight into the rounds view.
+    await page.click('.card[data-sl="2"] .more.rounds');
+    await page.waitForSelector('#sheet[open]');
+    t(label + ': the card link opens the rounds view',
+      page.url().endsWith('#race-2-rounds') &&
+      (await page.getAttribute('#tabRounds', 'aria-selected')) === 'true', page.url());
+    t(label + ': showing that race\'s heats',
+      (await page.textContent('#shBody')).includes('Semi Final'));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
 
     // A link someone shared has to open on that race, not on the grid.
     await page.goto(base + '#race-2');

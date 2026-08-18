@@ -93,6 +93,7 @@ $genders  = \Models\EventRace::GENDERS;
         <thead class="table-light">
           <tr>
             <th style="width:60px" data-sort="serial">Sl.</th>
+            <th style="width:64px" title="Shown on the public results card">Image</th>
             <th data-sort="name">Race</th>
             <th data-sort="when">Date &amp; Time</th>
             <th class="text-center">Lanes</th>
@@ -109,6 +110,24 @@ $genders  = \Models\EventRace::GENDERS;
                 data-name="<?= e($r['name']) ?>"
                 data-when="<?= e(($r['race_date'] ?? '9999-12-31') . ' ' . ($r['race_time'] ?? '23:59')) ?>">
               <td class="fw-bold"><?= (int)$r['sl_no'] ?></td>
+              <td>
+                <?php $img = (string)($r['image'] ?? ''); ?>
+                <button type="button" class="btn btn-sm btn-link p-0 border-0 race-photo"
+                        data-race="<?= e($h) ?>"
+                        data-name="<?= e($r['name']) ?>"
+                        data-image="<?= e($img) ?>"
+                        title="<?= $img !== '' ? 'Change this race&rsquo;s image' : 'Add an image for this race' ?>">
+                  <?php if ($img !== ''): ?>
+                    <img src="<?= e($img) ?>" class="rounded border" width="48" height="34"
+                         style="object-fit:cover" alt="">
+                  <?php else: ?>
+                    <span class="d-inline-flex align-items-center justify-content-center rounded border text-muted"
+                          style="width:48px;height:34px;background:#f8fafc">
+                      <i class="bi bi-image"></i>
+                    </span>
+                  <?php endif; ?>
+                </button>
+              </td>
               <td>
                 <div class="fw-semibold"><?= e($r['name']) ?></div>
                 <?php if (!empty($r['name_regional'])): ?>
@@ -285,10 +304,82 @@ $genders  = \Models\EventRace::GENDERS;
   </div>
 <?php endforeach; ?>
 
+<!-- One image dialog, retargeted per row. This picture is what the public
+     results card shows for the race. -->
+<div class="modal fade" id="modalRacePhoto" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" id="racePhotoForm" enctype="multipart/form-data">
+        <?= csrf() ?>
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-image me-2"></i>Race image</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted">
+            Shown on the public results card for <strong id="racePhotoName"></strong>.
+            Landscape works best — the card crops to 16:7.
+          </p>
+          <div class="text-center mb-3">
+            <img id="racePhotoPreview" src="" class="rounded border d-none"
+                 style="max-width:100%;max-height:200px;object-fit:cover" alt="">
+          </div>
+          <input type="file" class="form-control" name="image" accept="image/*"
+                 data-preview="racePhotoPreview" data-max-mb="7" required>
+          <div class="form-text">JPG, PNG or WebP, up to 7&nbsp;MB.</div>
+        </div>
+        <div class="modal-footer justify-content-between">
+          <button type="button" class="btn btn-outline-danger d-none" id="racePhotoRemove">
+            <i class="bi bi-trash me-1"></i>Remove image
+          </button>
+          <div class="ms-auto d-flex gap-2">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Upload</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<form method="POST" id="racePhotoDeleteForm" class="d-none"><?= csrf() ?></form>
+
 <script>
 // Inline call-room status change — posts through the shared rgPost() helper
 // so the CSRF token and the toast behave exactly as everywhere else.
 document.addEventListener('DOMContentLoaded', function () {
+  // ── Race image: one modal, retargeted per row ──────────────────────────
+  var photoModal = document.getElementById('modalRacePhoto');
+  var photoForm  = document.getElementById('racePhotoForm');
+  var deleteForm = document.getElementById('racePhotoDeleteForm');
+  var removeBtn  = document.getElementById('racePhotoRemove');
+  var preview    = document.getElementById('racePhotoPreview');
+  var nameEl     = document.getElementById('racePhotoName');
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.race-photo');
+    if (!btn || !window.bootstrap) return;
+
+    var base = '/event-admin/order-of-events/' + btn.dataset.race + '/image';
+    photoForm.setAttribute('action', base);
+    deleteForm.setAttribute('action', base + '/delete');
+    nameEl.textContent = btn.dataset.name;
+
+    // An empty src makes the browser re-request the page, so only set it
+    // when there is actually an image.
+    var current = btn.dataset.image || '';
+    if (current !== '') preview.src = current;
+    preview.classList.toggle('d-none', current === '');
+    removeBtn.classList.toggle('d-none', current === '');
+
+    photoForm.reset();
+    bootstrap.Modal.getOrCreateInstance(photoModal).show();
+  });
+
+  removeBtn.addEventListener('click', function () {
+    if (confirm('Remove the image for this race?')) deleteForm.submit();
+  });
+
   document.querySelectorAll('.race-status').forEach(function (sel) {
     sel.addEventListener('change', async function () {
       var row = sel.closest('tr');

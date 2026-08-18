@@ -47,6 +47,9 @@
   .card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;
         box-shadow:0 1px 3px rgba(15,23,42,.05);display:flex;flex-direction:column;cursor:pointer}
   .card:hover{box-shadow:0 4px 14px rgba(15,23,42,.10)}
+  /* display:flex above out-ranks the browser's own [hidden] rule, so the
+     search filter has to hide the card explicitly. */
+  .card[hidden]{display:none}
   .thumb{aspect-ratio:16/7;background:#e2e8f0 center/cover no-repeat;position:relative}
   .thumb .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
              color:#94a3b8;font-size:30px}
@@ -76,9 +79,14 @@
   .time{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:var(--deep);
         flex:0 0 auto;white-space:nowrap;align-self:center}
   .note{font-size:12.5px;color:#64748b;margin-top:9px}
-  .more{margin-top:auto;padding-top:10px;font-size:12.5px;font-weight:700;color:var(--deep);
-        display:flex;align-items:center;gap:5px}
+  .foot{margin-top:auto;padding-top:10px;display:flex;align-items:center;
+        justify-content:space-between;gap:10px}
+  .more{font-size:12.5px;font-weight:700;color:var(--deep);display:flex;align-items:center;gap:5px}
+  .more.rounds{color:#475569}
   .more .chev{font-weight:800}
+  .qq{flex:0 0 auto;font-size:10px;font-weight:800;color:#166534;background:#dcfce7;
+      border-radius:5px;padding:2px 5px;align-self:center}
+  .time.out{color:#b91c1c;font-size:12px}
 
   .tally{background:#fff;border:1px solid var(--line);border-radius:14px;margin:0 0 26px;overflow:hidden}
   .tally h2{margin:0;padding:11px 14px;font-size:15px;border-bottom:1px solid var(--line)}
@@ -107,7 +115,13 @@
   .sh-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;
             color:#fff;margin-top:8px}
   .sh-badge.final{background:#16a34a}.sh-badge.round{background:#0369a1}.sh-badge.none{background:#64748b}
+  .sh-tabs{display:flex;gap:6px;padding:10px 14px 0}
+  .sh-tabs button{flex:1;font:inherit;font-size:13px;font-weight:700;padding:7px 10px;cursor:pointer;
+                  border:1px solid var(--line);background:#f8fafc;color:#475569;border-radius:9px}
+  .sh-tabs button[aria-selected="true"]{background:var(--deep);border-color:var(--deep);color:#fff}
   .sh-body{padding:4px 14px 14px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .sh-body .heat{font-size:12.5px;font-weight:700;color:var(--ink);margin:10px 0 0}
+  .sh-sec .when{font-weight:600;color:#94a3b8;text-transform:none;letter-spacing:0}
   .sh-body ol.places li{padding:9px 0;align-items:flex-start}
   .sh-body .boat{font-size:15px}
   /* There is room here, so the club and lane wrap rather than truncate. */
@@ -181,6 +195,10 @@
     </div>
     <button class="x" id="shClose" type="button" aria-label="Close">✕</button>
   </div>
+  <div class="sh-tabs" id="shTabs" role="tablist" hidden>
+    <button type="button" id="tabResult" role="tab" data-view="result" aria-selected="true">Result</button>
+    <button type="button" id="tabRounds" role="tab" data-view="rounds" aria-selected="false">Heats &amp; rounds</button>
+  </div>
   <div class="sh-body" id="shBody"></div>
   <div class="sh-foot"><span id="shFoot"></span><button id="shShare" type="button" hidden>Copy link</button></div>
 </dialog>
@@ -199,7 +217,7 @@
   var el = function (id) { return document.getElementById(id); };
   var data = null, version = null, failures = 0;
   var bySl = {};          // race number -> race, for the detail view
-  var sheet = el('sheet'), openSl = null, pushed = false, lastFocus = null;
+  var sheet = el('sheet'), openSl = null, openView = 'result', pushed = false, lastFocus = null;
   var modal = typeof sheet.showModal === 'function';
   if (!modal) sheet.classList.add('fb');
 
@@ -220,8 +238,8 @@
   function rowHtml(x, detail) {
     var badge = x.pos ? String(x.pos) : (x.code ? x.code : '•');
     var under = x.club || '';
-    if (detail && x.lane) under += (under ? ' · ' : '') + 'Lane ' + x.lane;
-    if (detail && x.heat) under += (under ? ' · ' : '') + 'Heat ' + x.heat;
+    if (detail && x.lane) under += (under ? ' · ' : '') + 'Lane\u00a0' + x.lane;
+    if (detail && x.heat) under += (under ? ' · ' : '') + 'Heat\u00a0' + x.heat;
     return '<li' + (x.pos && x.pos <= 3 ? ' class="p' + x.pos + '"' : '') + '>' +
       '<span class="pos">' + esc(badge) + '</span>' +
       '<span class="who"><span class="boat">' + esc(x.boat) + '</span>' +
@@ -234,6 +252,38 @@
     return '<ol class="places">' + use.map(function (r) {
       return rowHtml(r, detail);
     }).join('') + '</ol>';
+  }
+
+  /** One heat's lanes, in finishing order. */
+  function heatHtml(lanes) {
+    if (!lanes || !lanes.length) return '<p class="note">No boats were drawn in this heat.</p>';
+    return '<ol class="places">' + lanes.map(function (l) {
+      var right = l.out ? '<span class="time out">' + esc(l.out) + '</span>'
+                : (l.time ? '<span class="time">' + esc(l.time) + '</span>' : '');
+      return '<li' + (l.pos && l.pos <= 3 && !l.out ? ' class="p' + l.pos + '"' : '') + '>' +
+        '<span class="pos">' + (l.pos ? esc(l.pos) : '–') + '</span>' +
+        '<span class="who"><span class="boat">' + esc(l.boat) + '</span>' +
+        '<span class="club">' + esc(l.club) + ' · Lane\u00a0' + esc(l.lane) + '</span></span>' +
+        right + (l.q ? '<span class="qq">Q</span>' : '') + '</li>';
+    }).join('') + '</ol>';
+  }
+
+  /** Every published round of a race, heat by heat. */
+  function roundsHtml(r) {
+    if (!r.rounds || !r.rounds.length) {
+      return '<p class="note">No round has been published for this race yet.</p>';
+    }
+    return r.rounds.map(function (rd) {
+      var head = '<div class="sh-sec">' + esc(rd.name) +
+        (rd.when ? ' <span class="when">· ' + esc(rd.when) + '</span>' : '') + '</div>';
+      if (!rd.heats || !rd.heats.length) return head + '<p class="note">No heats recorded.</p>';
+      // A single-heat round is its own heading; naming it "Heat 1" adds nothing.
+      var one = rd.heats.length === 1;
+      return head + rd.heats.map(function (h) {
+        return (one ? '' : '<div class="heat">' + esc(h.name || ('Heat ' + h.no)) + '</div>') +
+          heatHtml(h.lanes);
+      }).join('');
+    }).join('');
   }
 
   /** The rows a race shows, whichever of the three states it is in. */
@@ -284,8 +334,14 @@
             (r.state === 'round' ? ' — qualified' : '') + '</div>'
           : '') +
         body +
-        '<div class="more">' + esc(moreLabel(r, rows.length - PREVIEW)) +
-          '<span class="chev">›</span></div>' +
+        '<div class="foot">' +
+          '<span class="more">' + esc(moreLabel(r, rows.length - PREVIEW)) +
+            '<span class="chev">›</span></span>' +
+          (r.rounds && r.rounds.length
+            ? '<span class="more rounds" data-view="rounds">Heats &amp; rounds' +
+              '<span class="chev">›</span></span>'
+            : '') +
+        '</div>' +
       '</div></article>';
   }
 
@@ -299,6 +355,21 @@
     el('shBadge').textContent = r.label || '';
     el('shBadge').className   = 'sh-badge ' + (r.state || 'none');
 
+    // The rounds tab only exists once a round has actually been published.
+    var hasRounds = !!(r.rounds && r.rounds.length);
+    el('shTabs').hidden = !hasRounds;
+    el('tabResult').textContent = r.state === 'none' ? 'Boats' : 'Result';
+    if (!hasRounds) openView = 'result';
+    el('tabResult').setAttribute('aria-selected', String(openView === 'result'));
+    el('tabRounds').setAttribute('aria-selected', String(openView === 'rounds'));
+
+    if (openView === 'rounds') {
+      el('shBody').innerHTML = roundsHtml(r);
+      el('shFoot').textContent = r.rounds.length === 1 ? '1 round published'
+                                                       : r.rounds.length + ' rounds published';
+      return;
+    }
+
     var heading = r.state === 'final' ? (r.round ? r.round + ' — placings' : 'Placings')
                 : r.state === 'round' ? (r.round ? r.round + ' — qualified' : 'Qualified')
                 : 'Boats entered';
@@ -309,11 +380,12 @@
                              : 'No result published yet';
   }
 
-  function openSheet(sl) {
+  function openSheet(sl, view) {
     var r = bySl[sl];
     if (!r) return;
+    openView = view === 'rounds' ? 'rounds' : 'result';
     fillSheet(r);
-    if (openSl === sl && sheet.hasAttribute('open')) return;
+    if (openSl === sl && sheet.hasAttribute('open')) { el('shBody').scrollTop = 0; return; }
     openSl = sl;
     lastFocus = document.querySelector('.card[data-sl="' + sl + '"]');
     if (modal) { sheet.showModal(); }
@@ -344,23 +416,37 @@
   }
 
   function onHash() {
-    var m = /^#race-(\d+)$/.exec(location.hash || '');
-    if (m) openSheet(parseInt(m[1], 10)); else closeSheet();
+    var m = /^#race-(\d+)(?:-(rounds))?$/.exec(location.hash || '');
+    if (m) openSheet(parseInt(m[1], 10), m[2]); else closeSheet();
   }
 
-  el('cards').addEventListener('click', function (ev) {
-    var card = ev.target.closest && ev.target.closest('.card');
-    if (!card) return;
+  function hashFor(sl, view) { return 'race-' + sl + (view === 'rounds' ? '-rounds' : ''); }
+
+  // Anywhere on the card opens the result; the second link opens the rounds.
+  function openFrom(target) {
+    var card = target.closest && target.closest('.card');
+    if (!card) return false;
+    var link = target.closest('[data-view]');
     pushed = true;
-    location.hash = 'race-' + card.dataset.sl;   // fires hashchange -> opens
-  });
+    location.hash = hashFor(card.dataset.sl, link && link.dataset.view);
+    return true;                                 // fires hashchange -> opens
+  }
+
+  el('cards').addEventListener('click', function (ev) { openFrom(ev.target); });
   el('cards').addEventListener('keydown', function (ev) {
     if (ev.key !== 'Enter' && ev.key !== ' ') return;
-    var card = ev.target.closest && ev.target.closest('.card');
-    if (!card) return;
-    ev.preventDefault();
-    pushed = true;
-    location.hash = 'race-' + card.dataset.sl;
+    if (openFrom(ev.target)) ev.preventDefault();
+  });
+
+  // Switching tabs replaces the entry rather than pushing one, so Back always
+  // closes the sheet instead of stepping between its tabs.
+  el('shTabs').addEventListener('click', function (ev) {
+    var tab = ev.target.closest('[data-view]');
+    if (!tab || openSl === null) return;
+    openView = tab.dataset.view;
+    history.replaceState(null, '', '#' + hashFor(openSl, openView));
+    fillSheet(bySl[openSl]);
+    el('shBody').scrollTop = 0;
   });
 
   el('shClose').addEventListener('click', function () { closeSheet(); });

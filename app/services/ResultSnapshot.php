@@ -44,7 +44,7 @@ class ResultSnapshot
      * can tell "deployed but never republished" from a genuine server fault —
      * from a browser the two look identical.
      */
-    public const TEMPLATE_VERSION = 3;
+    public const TEMPLATE_VERSION = 4;
 
     /** Per-race publication state, in the order the public page shows it. */
     public const STATE_FINAL = 'final';   // the deciding round is published
@@ -166,6 +166,11 @@ class ResultSnapshot
             'image'    => (string)($race['image'] ?? ''),
         ];
 
+        // Every published round, heat by heat. A race with 15 boats over 4
+        // lanes was rowed in 4 heats, a semi and a final; the card shows the
+        // outcome, and this is how someone gets at how it was reached.
+        $card['rounds'] = self::roundBreakdown($race);
+
         // The deciding round is published: this race is settled.
         if ($deciding && $deciding['status'] === 'published') {
             $card['state']  = self::STATE_FINAL;
@@ -195,6 +200,58 @@ class ResultSnapshot
             'image' => (string)($t['entry_image'] ?? ''),
         ], EventRace::entries($raceId));
         return $card;
+    }
+
+    /**
+     * The published rounds of a race in ladder order, each with its heats and
+     * every lane in them. Unpublished rounds are left out entirely — a draw
+     * that has not been rowed is not public information.
+     */
+    private static function roundBreakdown(array $race): array
+    {
+        $out = [];
+        foreach (Round::forRace((int)$race['id']) as $round) {
+            if (($round['status'] ?? '') !== 'published') continue;
+
+            $heats = [];
+            foreach (Heat::forRound((int)$round['id']) as $heat) {
+                $lanes = [];
+                foreach (LaneAllocation::forHeat((int)$heat['id']) as $lane) {
+                    $outcome = strtolower((string)($lane['outcome'] ?? 'ok'));
+                    $lanes[] = [
+                        'lane' => (int)$lane['lane_no'],
+                        'boat' => (string)$lane['boat_name'],
+                        'club' => (string)$lane['club_name'],
+                        'pos'  => $lane['position'] === null ? 0 : (int)$lane['position'],
+                        'time' => (string)($lane['race_time'] ?? ''),
+                        'out'  => $outcome === 'ok' ? '' : strtoupper($outcome),
+                        'q'    => !empty($lane['qualified']) ? 1 : 0,
+                    ];
+                }
+                // Finishing order, with anything unplaced left at the bottom
+                // in lane order rather than jumping to the front.
+                usort($lanes, function ($a, $b) {
+                    $pa = $a['pos'] ?: PHP_INT_MAX;
+                    $pb = $b['pos'] ?: PHP_INT_MAX;
+                    return $pa === $pb ? $a['lane'] <=> $b['lane'] : $pa <=> $pb;
+                });
+
+                $heats[] = [
+                    'no'    => (int)$heat['heat_no'],
+                    'name'  => (string)($heat['name'] ?? ''),
+                    'when'  => scheduleLabel(heatSchedule($heat, $round, $race)),
+                    'lanes' => $lanes,
+                ];
+            }
+
+            $out[] = [
+                'name'  => (string)$round['name'],
+                'type'  => (string)($round['round_type'] ?? ''),
+                'when'  => scheduleLabel(roundSchedule($round, $race)),
+                'heats' => $heats,
+            ];
+        }
+        return $out;
     }
 
     /** Latest published round of a race, whichever it is. */
