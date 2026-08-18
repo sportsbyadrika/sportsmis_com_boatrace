@@ -120,6 +120,59 @@ $router->post('/admin/admins/{hash}/update',       'AdminAccountController@updat
 $router->post('/admin/admins/{hash}/reset',        'AdminAccountController@resetPassword');
 $router->post('/admin/admins/{hash}/delete',       'AdminAccountController@destroy');
 
+// ═══════════════════════════════════════════════════════ EVENT ADMIN
+$router->get ('/event-admin/dashboard',                       'EventAdminController@dashboard');
+$router->get ('/event-admin/details',                         'EventAdminController@details');
+$router->post('/event-admin/details/{panel}/save',            'EventAdminController@saveSection');
+$router->post('/event-admin/details/image',                   'EventAdminController@saveImage');
+
+$router->get ('/event-admin/teams',                           'EventAdminTeamController@index');
+$router->get ('/event-admin/teams/create',                    'EventAdminTeamController@createForm');
+$router->post('/event-admin/teams',                           'EventAdminTeamController@store');
+$router->get ('/event-admin/teams/{hash}/edit',               'EventAdminTeamController@editForm');
+$router->post('/event-admin/teams/{hash}',                    'EventAdminTeamController@update');
+$router->post('/event-admin/teams/{hash}/delete',             'EventAdminTeamController@destroy');
+
+$router->get ('/event-admin/registrations',                   'EventAdminTeamController@registrations');
+$router->post('/event-admin/registrations/approve-all',       'EventAdminTeamController@approveAll');
+$router->post('/event-admin/registrations/{hash}/decide',     'EventAdminTeamController@decide');
+
+$router->get ('/event-admin/order-of-events',                  'EventAdminRaceController@index');
+$router->post('/event-admin/order-of-events',                  'EventAdminRaceController@store');
+$router->get ('/event-admin/order-of-events/print',            'EventAdminRaceController@programmePrint');
+$router->get ('/event-admin/order-of-events/pdf',              'EventAdminRaceController@programmePdf');
+$router->post('/event-admin/order-of-events/resequence',       'EventAdminRaceController@resequence');
+$router->get ('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceController@entries');
+$router->post('/event-admin/order-of-events/{hash}/entries',   'EventAdminRaceController@saveEntries');
+$router->post('/event-admin/order-of-events/{hash}/status',    'EventAdminRaceController@setStatus');
+$router->post('/event-admin/order-of-events/{hash}/delete',    'EventAdminRaceController@destroy');
+$router->post('/event-admin/order-of-events/{hash}',           'EventAdminRaceController@update');
+
+$router->get ('/event-admin/users',                           'EventAdminUserController@index');
+$router->post('/event-admin/users',                           'EventAdminUserController@store');
+$router->post('/event-admin/users/{hash}/update',             'EventAdminUserController@update');
+$router->post('/event-admin/users/{hash}/reset',              'EventAdminUserController@resetPassword');
+$router->post('/event-admin/users/{hash}/delete',             'EventAdminUserController@destroy');
+
+// ═══════════════════════════════════════════════════════ EVENT USER (race office)
+$router->get ('/event-user/dashboard',                     'EventUserController@dashboard');
+
+$router->get ('/event-user/rounds',                        'EventUserRoundController@index');
+$router->get ('/event-user/rounds/{hash}',                 'EventUserRoundController@show');
+$router->post('/event-user/rounds/{hash}/seed',            'EventUserRoundController@seedLadder');
+$router->post('/event-user/rounds/{hash}/rounds',          'EventUserRoundController@storeRound');
+$router->post('/event-user/rounds/round/{hash}',           'EventUserRoundController@updateRound');
+$router->post('/event-user/rounds/round/{hash}/heats',     'EventUserRoundController@setHeats');
+$router->post('/event-user/rounds/round/{hash}/delete',    'EventUserRoundController@destroyRound');
+$router->post('/event-user/rounds/heat/{hash}',            'EventUserRoundController@updateHeat');
+
+$router->get ('/event-user/lane-allocation',               'EventUserLaneController@index');
+$router->post('/event-user/lane-allocation/assign',        'EventUserLaneController@assign');
+$router->post('/event-user/lane-allocation/unassign',      'EventUserLaneController@unassign');
+$router->post('/event-user/lane-allocation/move',          'EventUserLaneController@move');
+$router->post('/event-user/lane-allocation/auto-fill',     'EventUserLaneController@autoFill');
+$router->post('/event-user/lane-allocation/clear',         'EventUserLaneController@clear');
+
 // ═══════════════════════════════════════════════════════ PUBLIC (stub)
 $router->get ('/public',                           'PublicController@index');
 
