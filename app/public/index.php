@@ -120,6 +120,29 @@ $router->post('/admin/admins/{hash}/update',       'AdminAccountController@updat
 $router->post('/admin/admins/{hash}/reset',        'AdminAccountController@resetPassword');
 $router->post('/admin/admins/{hash}/delete',       'AdminAccountController@destroy');
 
+// ═══════════════════════════════════════════════════════ EVENT ADMIN
+$router->get ('/event-admin/dashboard',                       'EventAdminController@dashboard');
+$router->get ('/event-admin/details',                         'EventAdminController@details');
+$router->post('/event-admin/details/{panel}/save',            'EventAdminController@saveSection');
+$router->post('/event-admin/details/image',                   'EventAdminController@saveImage');
+
+$router->get ('/event-admin/teams',                           'EventAdminTeamController@index');
+$router->get ('/event-admin/teams/create',                    'EventAdminTeamController@createForm');
+$router->post('/event-admin/teams',                           'EventAdminTeamController@store');
+$router->get ('/event-admin/teams/{hash}/edit',               'EventAdminTeamController@editForm');
+$router->post('/event-admin/teams/{hash}',                    'EventAdminTeamController@update');
+$router->post('/event-admin/teams/{hash}/delete',             'EventAdminTeamController@destroy');
+
+$router->get ('/event-admin/registrations',                   'EventAdminTeamController@registrations');
+$router->post('/event-admin/registrations/approve-all',       'EventAdminTeamController@approveAll');
+$router->post('/event-admin/registrations/{hash}/decide',     'EventAdminTeamController@decide');
+
+$router->get ('/event-admin/users',                           'EventAdminUserController@index');
+$router->post('/event-admin/users',                           'EventAdminUserController@store');
+$router->post('/event-admin/users/{hash}/update',             'EventAdminUserController@update');
+$router->post('/event-admin/users/{hash}/reset',              'EventAdminUserController@resetPassword');
+$router->post('/event-admin/users/{hash}/delete',             'EventAdminUserController@destroy');
+
 // ═══════════════════════════════════════════════════════ PUBLIC (stub)
 $router->get ('/public',                           'PublicController@index');
 

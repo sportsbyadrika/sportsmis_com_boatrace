@@ -80,6 +80,16 @@ foreach (glob(APP_ROOT . '/controllers/*.php') as $file) {
             $errors[] = "VIEW  {$name}: view '{$view}' not found";
         }
     }
+
+    // $this->view('path') — the per-area shorthand defined on the base
+    // controllers, which wraps renderWith() with that area's layout.
+    preg_match_all('/->view\s*\(\s*\'([^\']+)\'/', $src, $sv, PREG_SET_ORDER);
+    foreach ($sv as [$_, $view]) {
+        $checked['views']++;
+        if (!file_exists(APP_ROOT . "/views/{$view}.php")) {
+            $errors[] = "VIEW  {$name}: view '{$view}' not found";
+        }
+    }
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────
