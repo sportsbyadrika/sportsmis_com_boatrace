@@ -1,0 +1,68 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Root .htaccess — SportsMIS® Regatta
+#
+# This file only matters when the domain's document root is the DEPLOYMENT
+# PATH (/home/olympicd/olympicday.in) rather than the application's public
+# directory. Without it Apache finds no index file at this level and serves a
+# directory listing of the whole repository — including app/.env and
+# database/ — which is what this file exists to stop.
+#
+# THE PREFERRED FIX IS STILL TO MOVE THE DOCUMENT ROOT:
+#
+#     cPanel → Domains → boatrace.olympicday.in → Document Root
+#         /home/olympicd/olympicday.in/app/public
+#
+# With the document root set there, this file sits above it and Apache never
+# reads it — it simply becomes harmless. Keeping both means the site works
+# either way, and a document root that gets reset by a control-panel change
+# can't silently re-expose the source tree.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# No directory listings anywhere below this point. This alone turns the
+# exposed file listing into a 403, even if mod_rewrite is unavailable.
+Options -Indexes
+
+DirectoryIndex index.php index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Loop guard: once a request has been rewritten into app/public/, leave it
+    # alone and let app/public/.htaccess take over with the front-controller
+    # rewrite. Without this, the catch-all below would rewrite its own output.
+    RewriteRule ^app/public/ - [L]
+
+    # Send everything else into the application's public directory. Nothing
+    # outside app/public is reachable over HTTP as a result — a request for
+    # /app/.env or /database/schema.sql is rewritten to a path that does not
+    # exist and falls through to the router's 404.
+    RewriteRule ^(.*)$ app/public/$1 [L]
+</IfModule>
+
+# ── Defence in depth ───────────────────────────────────────────────────────
+# The rewrites above already make the source tree unreachable, but they are
+# the first thing to stop working if mod_rewrite is disabled or a later edit
+# breaks the rules. These denials do not depend on it.
+
+# Dotfiles — app/.env above all, plus .gitignore and .cpanel.yml if a deploy
+# ever leaves them behind.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Repository and configuration files that must never be served. No file with
+# these extensions is served from app/public, so denying them globally costs
+# nothing: the public tree holds only .php, .css, .js, .svg and uploads.
+# (.user.ini is deliberately absent from this list — it is a dotfile, so the
+#  rule above already covers it, and listing it here would read as a clash.)
+<FilesMatch "\.(env|sql|log|md|yml|yaml|json|lock|dist|bak)$">
+    Require all denied
+</FilesMatch>
+
+# Security headers, matching app/public/.htaccess so they apply on both paths.
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+</IfModule>

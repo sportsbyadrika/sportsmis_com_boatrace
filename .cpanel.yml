@@ -12,10 +12,15 @@
 # ── Before the first deploy ────────────────────────────────────────────────
 #
 #  1. DOCUMENT ROOT. The application's front controller is app/public/index.php,
-#     so the domain must serve /home/olympicd/olympicday.in/app/public — NOT
-#     the deployment path itself. Set that under Domains → olympicday.in →
-#     Document Root. Pointing the domain at the deployment path would expose
-#     app/.env, app/config/ and database/ to the web.
+#     so https://boatrace.olympicday.in must serve
+#     /home/olympicd/olympicday.in/app/public — NOT the deployment path itself.
+#     Set that under Domains → boatrace.olympicday.in → Document Root.
+#
+#     With the document root left at the deployment path, Apache finds no
+#     index file there and serves a directory listing of the whole repository.
+#     The root .htaccess in this repository covers that case: it disables
+#     listings and rewrites every request into app/public. Keeping both means
+#     the site works either way — but the document root is still the right fix.
 #
 #  2. app/.env is deliberately NOT deployed (it is gitignored, so it never
 #     reaches the repository). Create it once on the server from
