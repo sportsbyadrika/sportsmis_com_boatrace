@@ -1,7 +1,7 @@
 <?php
 namespace Controllers;
 
-use Core\Pdf;
+use Core\{Pdf, FileUpload};
 use Models\{EventRace, TeamRegistration, AppSetting};
 
 /**
@@ -132,6 +132,7 @@ class EventAdminRaceController extends EventAdminBase
             'race'      => $race,
             'approved'  => TeamRegistration::forEvent($this->eventId(), 'approved'),
             'entered'   => EventRace::entryRegistrationIds((int)$race['id']),
+            'entryMap'  => EventRace::entryMap((int)$race['id']),
         ]);
     }
 
@@ -144,6 +145,48 @@ class EventAdminRaceController extends EventAdminBase
         $n = EventRace::setEntries($this->eventId(), (int)$race['id'], (array)($_POST['registrations'] ?? []));
         $this->redirect('/event-admin/order-of-events/' . hid_race((int)$race['id']) . '/entries',
             "Saved — {$n} boat" . ($n === 1 ? '' : 's') . ' entered in this race.');
+    }
+
+    /**
+     * Upload the photo of one boat AS IT RACES HERE. Kept on the race entry
+     * rather than the team, because the same club may field a different boat
+     * in each race — teams.logo remains the club crest.
+     */
+    public function entryImage(string $hash, string $entryHash): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+        $race = $this->raceOr404($hash);
+        $back = '/event-admin/order-of-events/' . hid_race((int)$race['id']) . '/entries';
+
+        $entry = EventRace::findEntry((int)$race['id'], hid_entry_decode($entryHash));
+        if (!$entry) $this->abort(404);
+
+        if (empty($_FILES['image']['name'])) {
+            $this->redirect($back, 'Choose an image first.', 'error');
+        }
+        try {
+            $url = (new FileUpload())->upload($_FILES['image'], 'boats', true);
+        } catch (\RuntimeException $e) {
+            $this->redirect($back, $e->getMessage(), 'error');
+        }
+
+        EventRace::setEntryImage((int)$entry['id'], $url);
+        $this->redirect($back, 'Boat photo updated.');
+    }
+
+    public function entryImageDelete(string $hash, string $entryHash): void
+    {
+        $this->boot();
+        $this->verifyCsrf();
+        $race = $this->raceOr404($hash);
+        $back = '/event-admin/order-of-events/' . hid_race((int)$race['id']) . '/entries';
+
+        $entry = EventRace::findEntry((int)$race['id'], hid_entry_decode($entryHash));
+        if (!$entry) $this->abort(404);
+
+        EventRace::setEntryImage((int)$entry['id'], null);
+        $this->redirect($back, 'Boat photo removed.');
     }
 
     // ── Printable programme ──────────────────────────────────────────────────

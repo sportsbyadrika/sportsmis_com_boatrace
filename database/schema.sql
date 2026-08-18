@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS race_entries (
     event_id             INT NOT NULL,
     event_race_id        INT NOT NULL,
     team_registration_id INT NOT NULL,
+    image                VARCHAR(255) NULL COMMENT 'photo of this boat in this race; distinct from the club crest',
     created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_race_entry (event_race_id, team_registration_id),
     KEY idx_race_entry_event (event_id),

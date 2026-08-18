@@ -111,6 +111,19 @@ commits them in one transaction. Two decisions worth knowing:
 Matching an uploaded row to a team already on file uses the short code when
 one is given, and club + boat name otherwise, both case-insensitively.
 
+### A boat's photo is per race, not per team
+
+`teams.logo` is the club crest. `race_entries.image` is a photo of the boat
+**as it races in that particular race**, because the same club may field a
+different boat in each one.
+
+That put a trap in `EventRace::setEntries()`, which used to clear the whole
+entry list and re-insert it. Ticking one more box would have destroyed every
+photo already uploaded for that race. It is now written as a diff — drop what
+is no longer wanted, insert what is new, leave the rest untouched — and
+`tools/selftest.php` pins that down: reverting to delete-and-reinsert fails
+three checks.
+
 ### Rounds own the lane count ⚠
 
 `lane_count` lives on `rounds`, not on the event or the race, because a final

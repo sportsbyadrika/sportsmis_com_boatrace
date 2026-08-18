@@ -127,11 +127,12 @@ class EventRace extends Model
 
     // ── Race entries (which boats contest which race) ────────────────────────
 
-    /** Approved registrations entered in this race. */
+    /** Approved registrations entered in this race, with the boat's photo. */
     public static function entries(int $raceId): array
     {
         return static::rows(
-            "SELECT e.id AS entry_id, tr.id AS registration_id, t.*
+            "SELECT e.id AS entry_id, e.image AS entry_image,
+                    tr.id AS registration_id, t.*
                FROM race_entries e
                JOIN team_registrations tr ON tr.id = e.team_registration_id
                JOIN teams t               ON t.id  = tr.team_id
@@ -139,6 +140,36 @@ class EventRace extends Model
               ORDER BY t.club_name, t.boat_name",
             [$raceId]
         );
+    }
+
+    /** registration id => [entry_id, image], for rendering the entries grid. */
+    public static function entryMap(int $raceId): array
+    {
+        $out = [];
+        foreach (static::rows(
+            "SELECT id, team_registration_id, image FROM race_entries WHERE event_race_id = ?",
+            [$raceId]
+        ) as $row) {
+            $out[(int)$row['team_registration_id']] = [
+                'entry_id' => (int)$row['id'],
+                'image'    => (string)($row['image'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    /** One entry, scoped to its race — the guard for the image endpoints. */
+    public static function findEntry(int $raceId, int $entryId): ?array
+    {
+        return static::row(
+            "SELECT * FROM race_entries WHERE id = ? AND event_race_id = ?",
+            [$entryId, $raceId]
+        );
+    }
+
+    public static function setEntryImage(int $entryId, ?string $url): int
+    {
+        return static::update('race_entries', ['image' => $url], ['id' => $entryId]);
     }
 
     /** Registration ids already entered in this race. */
@@ -149,28 +180,48 @@ class EventRace extends Model
     }
 
     /**
-     * Replace a race's entry list with exactly $registrationIds. Only
-     * approved registrations of the same event are accepted, so an unvetted
-     * boat can never reach the lane board.
+     * Make a race's entry list exactly $registrationIds. Only approved
+     * registrations of the same event are accepted, so an unvetted boat can
+     * never reach the lane board.
+     *
+     * Written as a DIFF, not delete-and-reinsert: an entry row carries the
+     * boat's photo for this race, and rewriting the whole list every time
+     * someone ticks one more box would throw those photos away.
+     *
+     * Returns the number of boats entered afterwards.
      */
     public static function setEntries(int $eventId, int $raceId, array $registrationIds): int
     {
-        $ids = array_values(array_unique(array_map('intval', $registrationIds)));
-        static::query("DELETE FROM race_entries WHERE event_race_id = ?", [$raceId]);
-        if (!$ids) return 0;
+        $wanted = array_values(array_unique(array_map('intval', $registrationIds)));
 
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $valid = static::rows(
-            "SELECT id FROM team_registrations
-              WHERE event_id = ? AND status = 'approved' AND id IN ({$placeholders})",
-            [$eventId, ...$ids]
-        );
-        foreach ($valid as $v) {
+        // Keep only ids that are genuinely approved entries of this event.
+        $valid = [];
+        if ($wanted) {
+            $placeholders = implode(',', array_fill(0, count($wanted), '?'));
+            $rows = static::rows(
+                "SELECT id FROM team_registrations
+                  WHERE event_id = ? AND status = 'approved' AND id IN ({$placeholders})",
+                [$eventId, ...$wanted]
+            );
+            $valid = array_map('intval', array_column($rows, 'id'));
+        }
+
+        $existing = static::entryRegistrationIds($raceId);
+
+        foreach (array_diff($existing, $valid) as $drop) {
             static::query(
-                "INSERT IGNORE INTO race_entries (event_id, event_race_id, team_registration_id) VALUES (?,?,?)",
-                [$eventId, $raceId, (int)$v['id']]
+                "DELETE FROM race_entries WHERE event_race_id = ? AND team_registration_id = ?",
+                [$raceId, (int)$drop]
             );
         }
+        foreach (array_diff($valid, $existing) as $add) {
+            static::insert('race_entries', [
+                'event_id'             => $eventId,
+                'event_race_id'        => $raceId,
+                'team_registration_id' => (int)$add,
+            ]);
+        }
+
         return count($valid);
     }
 
