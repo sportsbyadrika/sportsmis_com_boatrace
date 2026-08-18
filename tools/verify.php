@@ -17,7 +17,7 @@ define('CONFIG_ROOT', APP_ROOT . '/config');
 define('PUBLIC_ROOT', APP_ROOT . '/public');
 
 $errors = [];
-$checked = ['lint' => 0, 'routes' => 0, 'views' => 0];
+$checked = ['lint' => 0, 'routes' => 0, 'views' => 0, 'js' => 0];
 
 // ── 1. Lint ─────────────────────────────────────────────────────────────────
 $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root . '/app'));
@@ -92,9 +92,35 @@ foreach (glob(APP_ROOT . '/controllers/*.php') as $file) {
     }
 }
 
+// ── 5. Inline <script> blocks in views (skipped when node isn't available) ──
+exec('node --version 2>/dev/null', $nodeOut, $nodeCode);
+if ($nodeCode === 0) {
+    $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(APP_ROOT . '/views'));
+    foreach ($rii as $file) {
+        if ($file->isDir() || $file->getExtension() !== 'php') continue;
+        $src = file_get_contents($file->getPathname());
+        if (!preg_match_all('#<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>#s', $src, $blocks)) continue;
+        foreach ($blocks[1] as $i => $js) {
+            if (trim($js) === '') continue;
+            // A block that interpolates PHP isn't standalone JavaScript.
+            if (str_contains($js, '<?')) continue;
+            $checked['js']++;
+            $tmp = sys_get_temp_dir() . '/verify-' . getmypid() . "-{$i}.js";
+            file_put_contents($tmp, $js);
+            $out = [];
+            exec('node --check ' . escapeshellarg($tmp) . ' 2>&1', $out, $code);
+            @unlink($tmp);
+            if ($code !== 0) {
+                $errors[] = 'JS    ' . str_replace(APP_ROOT, 'app', $file->getPathname())
+                          . ' block #' . ($i + 1) . ': ' . implode(' ', $out);
+            }
+        }
+    }
+}
+
 // ── Report ──────────────────────────────────────────────────────────────────
-printf("Linted %d files · checked %d routes · checked %d view targets\n",
-    $checked['lint'], $checked['routes'], $checked['views']);
+printf("Linted %d files · checked %d routes · %d view targets · %d inline script blocks\n",
+    $checked['lint'], $checked['routes'], $checked['views'], $checked['js']);
 
 if ($errors) {
     echo "\n" . count($errors) . " problem(s):\n";

@@ -166,6 +166,13 @@ $router->post('/event-user/rounds/round/{hash}/heats',     'EventUserRoundContro
 $router->post('/event-user/rounds/round/{hash}/delete',    'EventUserRoundController@destroyRound');
 $router->post('/event-user/rounds/heat/{hash}',            'EventUserRoundController@updateHeat');
 
+$router->get ('/event-user/lane-allocation',               'EventUserLaneController@index');
+$router->post('/event-user/lane-allocation/assign',        'EventUserLaneController@assign');
+$router->post('/event-user/lane-allocation/unassign',      'EventUserLaneController@unassign');
+$router->post('/event-user/lane-allocation/move',          'EventUserLaneController@move');
+$router->post('/event-user/lane-allocation/auto-fill',     'EventUserLaneController@autoFill');
+$router->post('/event-user/lane-allocation/clear',         'EventUserLaneController@clear');
+
 // ═══════════════════════════════════════════════════════ PUBLIC (stub)
 $router->get ('/public',                           'PublicController@index');
 
