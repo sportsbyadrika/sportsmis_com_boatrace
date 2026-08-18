@@ -29,7 +29,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/olympicd/olympicday.in
+    - export DEPLOYPATH=/home/olympicd/olympicday.in/boatrace
 
     # Copy the working tree across. app/.env is not in the repository, so an
     # existing one on the server is left untouched.
